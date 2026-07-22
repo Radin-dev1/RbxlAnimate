@@ -77,15 +77,29 @@ export const R15_BONE_MAP: Record<string, string> = {
   RightFoot: "RightFoot",
 };
 
+/** Matches InternalArmature bone names from Blender R6.blend */
 export const R6_BONE_MAP: Record<string, string> = {
   Root: "HumanoidRootPart",
   Torso: "Torso",
   Head: "Head",
-  LeftArm: "LeftArm",
-  RightArm: "RightArm",
-  LeftLeg: "LeftLeg",
-  RightLeg: "RightLeg",
+  LeftArm: "Left Arm",
+  RightArm: "Right Arm",
+  LeftLeg: "Left Leg",
+  RightLeg: "Right Leg",
 };
+
+/** Fallback: drive mesh Object3Ds by name when skins are missing */
+export const R6_MESH_MAP: Record<string, string> = {
+  Head: "Head_MBlocky",
+  Torso: "Torso_MBlocky",
+  LeftArm: "Left Arm_MBlocky",
+  RightArm: "Right Arm_MBlocky",
+  LeftLeg: "Left Leg_MBlocky",
+  RightLeg: "Right Leg_MBlocky",
+};
+
+/** Hard cap for any generated / imported clip length (7 minutes). */
+export const MAX_ANIMATION_SECONDS = 7 * 60;
 
 export interface JointPose {
   joint: JointName;

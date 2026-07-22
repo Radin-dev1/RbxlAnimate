@@ -31,7 +31,6 @@ export function StudioEditor() {
   const [prompt, setPrompt] = useState("cool emote: spin kick then victory pose");
   const [style, setStyle] = useState<AnimStyle>(settings.defaultStyle);
   const [rig, setRig] = useState<RigType>(settings.defaultRig || "r15");
-  const [duration, setDuration] = useState(2.2);
   const [intensity, setIntensity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +79,10 @@ export function StudioEditor() {
             ? `video motion: ${prompt || videoFile?.name || "uploaded clip"}`
             : prompt,
         style,
-        duration: duration * intensity,
         quality,
         source,
         rig,
+        intensity,
       });
       addClip(clip);
     } catch {
@@ -189,33 +188,19 @@ export function StudioEditor() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-2">
-                <span className="text-sm text-muted">Style</span>
-                <select
-                  className="input"
-                  value={style}
-                  onChange={(e) => setStyle(e.target.value as AnimStyle)}
-                >
-                  <option value="emote">Emote</option>
-                  <option value="combat">Combat</option>
-                  <option value="idle">Idle</option>
-                  <option value="walk">Walk</option>
-                </select>
-              </label>
-              <label className="space-y-2">
-                <span className="text-sm text-muted">Duration ({duration.toFixed(1)}s)</span>
-                <input
-                  className="range mt-4"
-                  type="range"
-                  min={0.8}
-                  max={6}
-                  step={0.1}
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                />
-              </label>
-            </div>
+            <label className="block space-y-2">
+              <span className="text-sm text-muted">Style</span>
+              <select
+                className="input"
+                value={style}
+                onChange={(e) => setStyle(e.target.value as AnimStyle)}
+              >
+                <option value="emote">Emote</option>
+                <option value="combat">Combat</option>
+                <option value="idle">Idle</option>
+                <option value="walk">Walk</option>
+              </select>
+            </label>
 
             <div className="space-y-2">
               <span className="text-sm text-muted">Rig</span>

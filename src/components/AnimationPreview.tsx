@@ -5,11 +5,12 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { AnimationClip, JointName, RigType } from "@/lib/types";
-import { R15_BONE_MAP, R6_BONE_MAP } from "@/lib/types";
+import { R15_BONE_MAP, R6_BONE_MAP, R6_MESH_MAP } from "@/lib/types";
 import { assetPath } from "@/lib/rigMap";
 
-const R15_URL = assetPath("/rigs/r15.glb");
-const R6_URL = assetPath("/rigs/r6.glb");
+// Cache-bust so Pages clients pick up re-exported meshes
+const R15_URL = `${assetPath("/rigs/r15.glb")}?v=3`;
+const R6_URL = `${assetPath("/rigs/r6.glb")}?v=3`;
 
 function samplePoses(clip: AnimationClip, time: number) {
   const frames = clip.keyframes;
@@ -49,6 +50,14 @@ function collectBones(root: THREE.Object3D) {
   return map;
 }
 
+function collectNamedObjects(root: THREE.Object3D) {
+  const map = new Map<string, THREE.Object3D>();
+  root.traverse((obj) => {
+    if (obj.name) map.set(obj.name, obj);
+  });
+  return map;
+}
+
 function prepareScene(scene: THREE.Object3D) {
   const root = scene.clone(true);
   root.traverse((obj) => {
@@ -75,6 +84,7 @@ function SkinnedRigPlayer({
   playing,
   timeRef,
   boneMap,
+  meshMap,
   scale,
   position,
 }: {
@@ -83,39 +93,70 @@ function SkinnedRigPlayer({
   playing: boolean;
   timeRef: React.MutableRefObject<number>;
   boneMap: Record<string, string>;
+  meshMap?: Record<string, string>;
   scale: number;
   position: [number, number, number];
 }) {
   const { scene } = useGLTF(url);
   const root = useMemo(() => prepareScene(scene), [scene]);
   const bones = useMemo(() => collectBones(root), [root]);
+  const named = useMemo(() => collectNamedObjects(root), [root]);
   const restRot = useMemo(() => {
     const map = new Map<string, THREE.Euler>();
     for (const [name, bone] of bones) {
-      map.set(name, bone.rotation.clone());
+      map.set(`bone:${name}`, bone.rotation.clone());
+    }
+    if (meshMap) {
+      for (const meshName of Object.values(meshMap)) {
+        const obj = named.get(meshName);
+        if (obj) map.set(`mesh:${meshName}`, obj.rotation.clone());
+      }
     }
     return map;
-  }, [bones]);
+  }, [bones, named, meshMap]);
 
   useFrame((_, delta) => {
-    if (!clip) {
-      // Reset to rest when no clip
+    const applyRest = () => {
       for (const [name, bone] of bones) {
-        const rest = restRot.get(name);
+        const rest = restRot.get(`bone:${name}`);
         if (rest) bone.rotation.copy(rest);
       }
+      if (meshMap) {
+        for (const meshName of Object.values(meshMap)) {
+          const obj = named.get(meshName);
+          const rest = restRot.get(`mesh:${meshName}`);
+          if (obj && rest) obj.rotation.copy(rest);
+        }
+      }
+    };
+
+    if (!clip) {
+      applyRest();
       return;
     }
     if (playing) timeRef.current += delta;
     const poseMap = samplePoses(clip, timeRef.current);
     if (!poseMap) return;
+
     for (const [joint, euler] of poseMap) {
       const boneName = boneMap[joint];
       const bone = boneName ? bones.get(boneName) : undefined;
-      const rest = boneName ? restRot.get(boneName) : undefined;
-      if (bone && rest) {
-        bone.rotation.order = "XYZ";
-        bone.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
+      if (bone) {
+        const rest = restRot.get(`bone:${boneName}`);
+        if (rest) {
+          bone.rotation.order = "XYZ";
+          bone.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
+        }
+        continue;
+      }
+      const meshName = meshMap?.[joint];
+      const meshObj = meshName ? named.get(meshName) : undefined;
+      if (meshObj) {
+        const rest = restRot.get(`mesh:${meshName}`);
+        if (rest) {
+          meshObj.rotation.order = "XYZ";
+          meshObj.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
+        }
       }
     }
   });
@@ -136,9 +177,10 @@ function RigCanvas({
 }) {
   const url = rig === "r6" ? R6_URL : R15_URL;
   const boneMap = rig === "r6" ? R6_BONE_MAP : R15_BONE_MAP;
-  // R6 source is ~5 studs tall; R15 similar — fit in preview frame
-  const scale = rig === "r6" ? 0.4 : 0.42;
-  const position: [number, number, number] = rig === "r6" ? [0, 0, 0] : [0, 0, 0];
+  const meshMap = rig === "r6" ? R6_MESH_MAP : undefined;
+  // Fit classic Roblox character scale into the preview frame
+  const scale = rig === "r6" ? 0.38 : 0.4;
+  const position: [number, number, number] = [0, 0, 0];
 
   return (
     <SkinnedRigPlayer
@@ -147,6 +189,7 @@ function RigCanvas({
       playing={playing}
       timeRef={timeRef}
       boneMap={boneMap}
+      meshMap={meshMap}
       scale={scale}
       position={position}
     />

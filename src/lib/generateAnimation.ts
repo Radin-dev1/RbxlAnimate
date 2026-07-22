@@ -1,5 +1,5 @@
 import type { AnimStyle, AnimationClip, JointName, Keyframe, JointPose, RigType } from "./types";
-import { R15_JOINTS } from "./types";
+import { MAX_ANIMATION_SECONDS, R15_JOINTS } from "./types";
 import { r15PosesToR6 } from "./rigMap";
 
 const ALL_JOINTS: JointName[] = R15_JOINTS;
@@ -636,40 +636,61 @@ function verbFollowPose(verb: MotionVerb, intensity: number): JointPose[] {
 
 function loopCyclePose(style: AnimStyle, phase: number, intensity: number, high: boolean): JointPose[] {
   const poses = restPose();
+  // Roblox default walk: ~1 cycle / ~0.8–1.0s feeling — contralateral limbs, pelvis yaw, foot plant
   const swing = Math.sin(phase * Math.PI * 2);
+  const swingQ = Math.sin(phase * Math.PI * 2 + Math.PI / 2);
   const swing2 = Math.sin(phase * Math.PI * 4);
   const breath = Math.sin(phase * Math.PI * 2);
+  // Plant bias: knee bends more on trailing / recovery side
+  const leftPlant = Math.max(0, -swing);
+  const rightPlant = Math.max(0, swing);
 
   if (style === "walk") {
     const amp = intensity;
-    setJoint(poses, "LeftUpperLeg", swing * 38 * amp);
-    setJoint(poses, "RightUpperLeg", -swing * 38 * amp);
-    setJoint(poses, "LeftLowerLeg", Math.max(0, -swing) * 45 * amp + (high ? Math.max(0, swing2) * 8 : 0));
-    setJoint(poses, "RightLowerLeg", Math.max(0, swing) * 45 * amp + (high ? Math.max(0, -swing2) * 8 : 0));
-    setJoint(poses, "LeftFoot", -Math.max(0, swing) * 12 * amp);
-    setJoint(poses, "RightFoot", -Math.max(0, -swing) * 12 * amp);
-    setJoint(poses, "LeftUpperArm", -swing * 28 * amp, 0, 6);
-    setJoint(poses, "RightUpperArm", swing * 28 * amp, 0, -6);
-    setJoint(poses, "LeftLowerArm", -15 * amp - Math.max(0, swing) * 10);
-    setJoint(poses, "RightLowerArm", -15 * amp - Math.max(0, -swing) * 10);
-    setJoint(poses, "UpperTorso", 3 * amp, swing * 7 * amp, high ? swing2 * 2 : 0);
-    setJoint(poses, "LowerTorso", 0, swing * 4 * amp, 0);
-    setJoint(poses, "Head", 0, -swing * 5 * amp, 0);
-    setJoint(poses, "Root", high ? Math.abs(swing) * -2 * amp : 0);
+    const runny = amp > 1.05;
+    const leg = (runny ? 48 : 36) * amp;
+    const arm = (runny ? 36 : 26) * amp;
+    setJoint(poses, "LeftUpperLeg", swing * leg, 0, swing * 3);
+    setJoint(poses, "RightUpperLeg", -swing * leg, 0, -swing * 3);
+    setJoint(poses, "LeftLowerLeg", leftPlant * 52 * amp + (high ? Math.max(0, swing2) * 6 : 0));
+    setJoint(poses, "RightLowerLeg", rightPlant * 52 * amp + (high ? Math.max(0, -swing2) * 6 : 0));
+    setJoint(poses, "LeftFoot", -rightPlant * 16 * amp + leftPlant * 6);
+    setJoint(poses, "RightFoot", -leftPlant * 16 * amp + rightPlant * 6);
+    // Arms counter-swing (classic Roblox / human gait)
+    setJoint(poses, "LeftUpperArm", -swing * arm, 0, 8);
+    setJoint(poses, "RightUpperArm", swing * arm, 0, -8);
+    setJoint(poses, "LeftLowerArm", -18 * amp - rightPlant * 14);
+    setJoint(poses, "RightLowerArm", -18 * amp - leftPlant * 14);
+    setJoint(poses, "LeftHand", 0, 0, high ? swingQ * 4 : 0);
+    setJoint(poses, "RightHand", 0, 0, high ? -swingQ * 4 : 0);
+    // Hip / torso yaw toward lead leg; slight forward lean when faster
+    setJoint(poses, "LowerTorso", 0, swing * 6 * amp, 0);
+    setJoint(poses, "UpperTorso", (runny ? 10 : 3) * amp, swing * 8 * amp, high ? swing2 * 2 : 0);
+    setJoint(poses, "Head", (runny ? 4 : 0) * amp, -swing * 6 * amp, 0);
+    setJoint(poses, "Root", high ? -Math.abs(swing) * 1.5 * amp : 0, 0, 0);
     return poses;
   }
 
   if (style === "idle") {
-    setJoint(poses, "UpperTorso", breath * 2.5 * intensity);
-    setJoint(poses, "LowerTorso", breath * 1.2 * intensity);
-    setJoint(poses, "Head", Math.sin(phase * Math.PI * 2 + 0.8) * 4 * intensity, Math.cos(phase * Math.PI * 2) * 6 * intensity, 0);
-    setJoint(poses, "LeftUpperArm", -8 * intensity + breath * 2, 0, 7 + (high ? swing2 * 1.5 : 0));
-    setJoint(poses, "RightUpperArm", -8 * intensity + breath * 2, 0, -7 - (high ? swing2 * 1.5 : 0));
-    setJoint(poses, "LeftLowerArm", -14 * intensity);
-    setJoint(poses, "RightLowerArm", -14 * intensity);
+    // Default Roblox idle: slow torso breathe + micro head look + soft shoulder drop
+    setJoint(poses, "UpperTorso", breath * 2.2 * intensity, Math.sin(phase * Math.PI * 0.5) * 1.5, 0);
+    setJoint(poses, "LowerTorso", breath * 1.1 * intensity);
+    setJoint(
+      poses,
+      "Head",
+      Math.sin(phase * Math.PI * 2 + 0.8) * 3.5 * intensity,
+      Math.sin(phase * Math.PI * 1.15) * 8 * intensity,
+      Math.cos(phase * Math.PI * 2) * 1.5,
+    );
+    setJoint(poses, "LeftUpperArm", -6 * intensity + breath * 2, 0, 5 + (high ? swing2 * 1.2 : 0));
+    setJoint(poses, "RightUpperArm", -6 * intensity + breath * 2, 0, -5 - (high ? swing2 * 1.2 : 0));
+    setJoint(poses, "LeftLowerArm", -12 * intensity);
+    setJoint(poses, "RightLowerArm", -12 * intensity);
     if (high) {
-      setJoint(poses, "LeftHand", 0, 0, breath * 4);
-      setJoint(poses, "RightHand", 0, 0, -breath * 4);
+      setJoint(poses, "LeftHand", 0, 0, breath * 3);
+      setJoint(poses, "RightHand", 0, 0, -breath * 3);
+      setJoint(poses, "LeftUpperLeg", breath * 1.5);
+      setJoint(poses, "RightUpperLeg", -breath * 1.2);
     }
     return poses;
   }
@@ -762,22 +783,60 @@ function sampleTimeline(
   return poseForPhase(phase, local, t, high);
 }
 
+export function inferDurationSeconds(opts: {
+  prompt: string;
+  style: AnimStyle;
+  stepCount: number;
+  intensity?: number;
+}): number {
+  const p = opts.prompt.toLowerCase();
+  const intensity = opts.intensity ?? 1;
+
+  // Explicit time in prompt: "30s", "2 min", "for 10 seconds"
+  const secMatch = p.match(/\b(\d+(?:\.\d+)?)\s*(s|sec|secs|second|seconds)\b/);
+  const minMatch = p.match(/\b(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes)\b/);
+  if (minMatch) {
+    return clampDuration(Number(minMatch[1]) * 60);
+  }
+  if (secMatch) {
+    return clampDuration(Number(secMatch[1]));
+  }
+
+  if (opts.style === "idle") return clampDuration(4.5 / Math.max(0.7, intensity));
+  if (opts.style === "walk") {
+    const cycles = /run|sprint|dash/.test(p) ? 3.2 : 2.6;
+    return clampDuration(cycles);
+  }
+
+  // Emote / combat: ~0.85–1.15s per verb step (Roblox emotes are short; combos stack)
+  const perStep = opts.style === "combat" ? 0.95 : 1.05;
+  const base = Math.max(1.2, opts.stepCount * perStep);
+  const slow = /\b(slow|gentle|soft|dramatic|long)\b/.test(p) ? 1.35 : 1;
+  const fast = /\b(fast|quick|snap|rapid)\b/.test(p) ? 0.75 : 1;
+  return clampDuration((base * slow * fast) / Math.max(0.75, Math.min(1.35, intensity)));
+}
+
+function clampDuration(seconds: number) {
+  return Math.min(MAX_ANIMATION_SECONDS, Math.max(0.4, seconds));
+}
+
 export function generateAnimationFromPrompt(opts: {
   prompt: string;
   style: AnimStyle;
-  duration: number;
+  /** Optional hint; ignored if omitted — duration is inferred from prompt/style. */
+  duration?: number;
   quality: "standard" | "high";
   source?: "text" | "video";
   rig?: RigType;
+  intensity?: number;
 }): AnimationClip {
   const rig: RigType = opts.rig || "r15";
   const style = detectStyle(opts.prompt, opts.style);
-  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v2`);
+  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v3`);
   const rand = seeded(seed);
   const high = opts.quality === "high";
-  const intensityBoost = high ? 1.12 : 0.95;
-  const frames = high ? 48 : 20;
-  const duration = Math.min(Math.max(opts.duration, 0.6), 8);
+  const intensityBoost = (opts.intensity ?? 1) * (high ? 1.12 : 0.95);
+  const frames = high ? 64 : 28;
   const loopable = style === "walk" || style === "idle";
 
   const steps = parseMotionGrammar(opts.prompt, style, rand).map((s) => ({
@@ -785,6 +844,14 @@ export function generateAnimationFromPrompt(opts: {
     intensity: s.intensity * intensityBoost,
   }));
   const phases = buildPhases(steps, loopable);
+
+  const inferred = inferDurationSeconds({
+    prompt: opts.prompt,
+    style,
+    stepCount: steps.length,
+    intensity: opts.intensity ?? 1,
+  });
+  const duration = clampDuration(opts.duration != null ? opts.duration : inferred);
 
   const keyframes: Keyframe[] = [];
   for (let i = 0; i <= frames; i++) {
@@ -799,10 +866,7 @@ export function generateAnimationFromPrompt(opts: {
   // Ensure clean settle on non-looping clips
   if (!loopable) {
     const last = keyframes[keyframes.length - 1];
-    const rest =
-      rig === "r6"
-        ? r15PosesToR6(restPose())
-        : restPose();
+    const rest = rig === "r6" ? r15PosesToR6(restPose()) : restPose();
     keyframes[keyframes.length - 1] = {
       time: duration,
       poses: blend(last.poses, rest, high ? 0.92 : 0.8),
