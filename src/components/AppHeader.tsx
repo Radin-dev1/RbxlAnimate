@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAppStore } from "@/lib/store";
+import { ThemePicker } from "./ThemePicker";
 
 const links = [
   { href: "/", label: "Maker" },
@@ -43,7 +44,7 @@ export function AppHeader() {
                 href={link.href}
                 className={`rounded-xl px-3.5 py-1.5 text-sm transition ${
                   active
-                    ? "bg-brand/20 text-white shadow-[0_0_20px_rgba(225,6,0,0.15)]"
+                    ? "bg-brand/20 text-white shadow-[0_0_20px_rgba(var(--brand-rgb),0.15)]"
                     : "text-muted hover:bg-white/5 hover:text-white"
                 }`}
               >
@@ -54,6 +55,7 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemePicker compact className="hidden lg:flex" />
           <div className="hidden rounded-xl border border-border/80 bg-black/40 px-3 py-1.5 text-xs text-muted sm:block">
             <span className={plan === "pro" ? "font-semibold text-brand" : ""}>{plan.toUpperCase()}</span>
             <span className="mx-1.5 text-border">·</span>

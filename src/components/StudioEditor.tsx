@@ -6,7 +6,7 @@ import { AnimationPreview } from "./AnimationPreview";
 import { BuyUsageModal } from "./BuyUsageModal";
 import { generateAnimationFromPrompt, clipToRobloxExport } from "@/lib/generateAnimation";
 import { useAppStore } from "@/lib/store";
-import type { AnimStyle } from "@/lib/types";
+import type { AnimStyle, RigType } from "@/lib/types";
 
 const PROMPT_CHIPS = [
   "spin then kick then victory",
@@ -26,9 +26,11 @@ export function StudioEditor() {
   const library = useAppStore((s) => s.library);
   const activeClipId = useAppStore((s) => s.activeClipId);
   const setActiveClip = useAppStore((s) => s.setActiveClip);
+  const updateSettings = useAppStore((s) => s.updateSettings);
 
   const [prompt, setPrompt] = useState("cool emote: spin kick then victory pose");
   const [style, setStyle] = useState<AnimStyle>(settings.defaultStyle);
+  const [rig, setRig] = useState<RigType>(settings.defaultRig || "r15");
   const [duration, setDuration] = useState(2.2);
   const [intensity, setIntensity] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -81,6 +83,7 @@ export function StudioEditor() {
         duration: duration * intensity,
         quality,
         source,
+        rig,
       });
       addClip(clip);
     } catch {
@@ -119,14 +122,19 @@ export function StudioEditor() {
             <span className="block text-brand brand-glow">move.</span>
           </h1>
           <p className="mt-4 max-w-xl text-base text-muted md:text-lg">
-            Prompt multi-step Roblox motion. Preview on R15. Export clean KeyframeSequence JSON —
-            never watermarked.
+            Prompt multi-step Roblox motion. Preview on real R15 / R6 Blender rigs. Export clean
+            KeyframeSequence JSON — never watermarked.
           </p>
         </div>
 
         <div className="stagger-2 grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
           <div className="space-y-4">
-            <AnimationPreview clip={activeClip} autoPlay={settings.autoPlayPreview} generating={busy} />
+            <AnimationPreview
+              clip={activeClip}
+              rig={rig}
+              autoPlay={settings.autoPlayPreview}
+              generating={busy}
+            />
             {library.length > 0 && (
               <div className="panel panel-inset p-3.5">
                 <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-muted">Recent</p>
@@ -207,6 +215,28 @@ export function StudioEditor() {
                   onChange={(e) => setDuration(Number(e.target.value))}
                 />
               </label>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-sm text-muted">Rig</span>
+              <div className="rig-toggle" role="group" aria-label="Rig type">
+                {(["r15", "r6"] as RigType[]).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={rig === id ? "is-active" : ""}
+                    onClick={() => {
+                      setRig(id);
+                      updateSettings({ defaultRig: id });
+                    }}
+                  >
+                    {id.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted">
+                Switches the live preview model and tags exports for Studio.
+              </p>
             </div>
 
             <label className="block space-y-2">

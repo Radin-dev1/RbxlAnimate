@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAppStore } from "@/lib/store";
 import { BuyUsageModal } from "@/components/BuyUsageModal";
+import { ThemePicker } from "@/components/ThemePicker";
 import type { AnimStyle } from "@/lib/types";
 import { FREE_MONTHLY_USAGE, PRO_MONTHLY_USAGE } from "@/lib/types";
 
@@ -63,6 +64,11 @@ export default function SettingsPage() {
       </section>
 
       <section className="panel space-y-4 p-5">
+        <h2 className="font-[family-name:var(--font-display)] text-lg">Look & style</h2>
+        <ThemePicker />
+      </section>
+
+      <section className="panel space-y-4 p-5">
         <h2 className="font-[family-name:var(--font-display)] text-lg">Preferences</h2>
         <label className="block space-y-1 text-sm">
           Default style
@@ -75,6 +81,17 @@ export default function SettingsPage() {
             <option value="combat">Combat</option>
             <option value="idle">Idle</option>
             <option value="walk">Walk</option>
+          </select>
+        </label>
+        <label className="block space-y-1 text-sm">
+          Default rig
+          <select
+            className="input"
+            value={settings.defaultRig || "r15"}
+            onChange={(e) => updateSettings({ defaultRig: e.target.value as "r15" | "r6" })}
+          >
+            <option value="r15">R15</option>
+            <option value="r6">R6</option>
           </select>
         </label>
         <Toggle
@@ -100,8 +117,8 @@ export default function SettingsPage() {
             value={settings.accentIntensity}
             onChange={(e) => updateSettings({ accentIntensity: e.target.value as "soft" | "bold" })}
           >
-            <option value="soft">Soft red</option>
-            <option value="bold">Bold red</option>
+            <option value="soft">Soft</option>
+            <option value="bold">Bold</option>
           </select>
         </label>
       </section>

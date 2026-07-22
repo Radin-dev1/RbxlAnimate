@@ -13,6 +13,8 @@
   --red-dim: #7a0300;
   --glow: rgba(225, 6, 0, 0.4);
   --glow-soft: rgba(225, 6, 0, 0.14);
+  --brand-rgb: 225, 6, 0;
+  --support: #ff2a2a;
   --font-display: "Orbitron", "Segoe UI", sans-serif;
   --font-body: "Manrope", "Segoe UI", sans-serif;
 }
@@ -47,12 +49,13 @@ body {
 body {
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse 90% 55% at 50% -22%, rgba(225, 6, 0, 0.22), transparent 60%),
-    radial-gradient(ellipse 40% 30% at 95% 12%, rgba(225, 6, 0, 0.1), transparent 55%),
-    radial-gradient(ellipse 35% 28% at 5% 70%, rgba(225, 6, 0, 0.06), transparent 50%),
-    linear-gradient(180deg, #0a0a0a 0%, #050505 42%, #030303 100%);
+    radial-gradient(ellipse 90% 55% at 50% -22%, rgba(var(--brand-rgb), 0.22), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 95% 12%, rgba(var(--brand-rgb), 0.1), transparent 55%),
+    radial-gradient(ellipse 35% 28% at 5% 70%, rgba(var(--brand-rgb), 0.06), transparent 50%),
+    linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg) 42%, #030303 100%);
   background-attachment: fixed;
   letter-spacing: 0.01em;
+  transition: background-color 0.35s ease;
 }
 
 body::before {
@@ -375,7 +378,7 @@ main {
 }
 
 .toggle[data-on="true"] {
-  background: rgba(225, 6, 0, 0.35);
+  background: rgba(var(--brand-rgb), 0.35);
   border-color: var(--red);
 }
 
@@ -395,4 +398,34 @@ main {
   transform: translateX(18px);
   background: var(--red-hot);
   box-shadow: 0 0 10px var(--glow);
+}
+
+.rig-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.rig-toggle button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rig-toggle button.is-active {
+  color: white;
+  background: linear-gradient(180deg, rgba(var(--brand-rgb), 0.45), rgba(var(--brand-rgb), 0.2));
+  box-shadow: 0 0 18px rgba(var(--brand-rgb), 0.25);
 }

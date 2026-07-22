@@ -4,6 +4,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AnimStyle, AnimationClip, Plan } from "./types";
 import { FREE_MONTHLY_USAGE, PRO_MONTHLY_USAGE } from "./types";
+import type { ThemeId } from "./themes";
+import { DEFAULT_THEME_ID } from "./themes";
 
 export interface DemoUser {
   email: string;
@@ -12,6 +14,8 @@ export interface DemoUser {
 
 interface UserSettings {
   defaultStyle: AnimStyle;
+  defaultRig: "r15" | "r6";
+  themeId: ThemeId;
   autoPlayPreview: boolean;
   exportFormat: "json" | "plugin";
   accentIntensity: "soft" | "bold";
@@ -48,6 +52,8 @@ interface AppState {
 
 const defaultSettings: UserSettings = {
   defaultStyle: "emote",
+  defaultRig: "r15",
+  themeId: DEFAULT_THEME_ID,
   autoPlayPreview: true,
   exportFormat: "json",
   accentIntensity: "bold",
@@ -124,6 +130,16 @@ export const useAppStore = create<AppState>()(
         }
       },
     }),
-    { name: "rbxlanimate-store-v1" },
+    { name: "rbxlanimate-store-v1",
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<AppState>;
+        return {
+          ...current,
+          ...p,
+          settings: { ...current.settings, ...(p.settings || {}) },
+          library: p.library || current.library,
+        };
+      },
+    },
   ),
 );

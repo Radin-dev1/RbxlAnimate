@@ -1,6 +1,6 @@
 # rbxlAnimate
 
-AI Roblox animation maker — **red & black** web studio. The live site *is* the maker (no separate marketing app).
+AI Roblox animation maker — themed web studio. The live site *is* the maker (no separate marketing app).
 
 **Repo:** https://github.com/Radin-dev1/RbxlAnimate  
 **Live (GitHub Pages):** https://radin-dev1.github.io/RbxlAnimate/
@@ -18,13 +18,21 @@ Local builds use no `basePath`. CI sets `GITHUB_PAGES=true` so assets resolve un
 
 ## What's working
 
-- **Homepage = maker** — prompt → R15-style 3D preview → export
-- **Procedural AI** — motion grammar (verbs / body parts / multi-step `then` sequences), anticipation → action → follow-through → settle, Pro high-quality frames
-- **No watermarks** on exports (`.rbxlAnimate.json` KeyframeSequence package)
-- **Auth:** demo email sign-in (browser localStorage). OAuth needs a backend later.
-- **Usage:** Free 10/mo · Pro 150/mo (demo upgrade / packs on Pages)
-- **Library · Pro · Settings** in the nav
-- Plugin folder stub for Phase 2 (Studio apply + backgrounds)
+- **Homepage = maker** — prompt → real **R15 / R6** 3D preview (GLB from Blender) → export
+- **Rigs** — `public/rigs/r15.glb` (MrXen0 R15) and `public/rigs/r6.glb` (classic blocky R6 from Blender R6)
+- **Rig toggle** — R15 | R6 in the maker; exports tag `rig: "r15" | "r6"`
+- **Style themes** — Classic Red/Black + Aqua Slate, Volt Mint, Rose Noir, Coral Smoke, Neon Grove, Teal Punch (Settings + header swatches)
+- **Procedural AI** — motion grammar, anticipation → action → follow-through → settle
+- **No watermarks** on exports (`.rbxlAnimate.json`)
+- **Auth:** demo email sign-in (localStorage)
+- Plugin folder stub for Phase 2
+
+## Rig credits
+
+- **R15:** MrXen0 — `MrXen0_R15RIG_v1.2`
+- **R6:** Blender R6 community rig (blocky body meshes + InternalArmature hierarchy)
+
+Re-export scripts live in `scripts/` (`export_r15_clean.py`, `export_r6_v2.py`) for Blender 4+/5+.
 
 ## Quick start
 
@@ -54,8 +62,6 @@ GitHub Pages serves **static files only**. This project uses `output: 'export'`.
 | Pro / usage packs | Demo upgrade (local) |
 | Stripe / NextAuth API | Not available on static Pages |
 
-To charge real money later, add a small backend (or serverless) for Stripe Checkout and optionally OAuth — the UI is already shaped for that.
-
 ## Monetization
 
 | | Free | Pro |
@@ -74,4 +80,4 @@ See [`plugin/README.md`](plugin/README.md): Roblox-only login, apply animations 
 
 ## License
 
-Private / all rights reserved unless otherwise noted.
+Private / all rights reserved unless otherwise noted. Rig authors retain rights to their original Blender assets; shipped GLBs are optimized web previews for this app.

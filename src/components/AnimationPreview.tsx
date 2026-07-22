@@ -1,102 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, ContactShadows } from "@react-three/drei";
+import { ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import type { AnimationClip, JointName } from "@/lib/types";
+import type { AnimationClip, JointName, RigType } from "@/lib/types";
+import { R15_BONE_MAP, R6_BONE_MAP } from "@/lib/types";
+import { assetPath } from "@/lib/rigMap";
 
-const JOINT_MESH: Record<
-  JointName,
-  { size: [number, number, number]; color: string }
-> = {
-  Root: { size: [0.35, 0.12, 0.25], color: "#3a3a3a" },
-  LowerTorso: { size: [0.55, 0.35, 0.3], color: "#c41e1e" },
-  UpperTorso: { size: [0.62, 0.45, 0.32], color: "#e10600" },
-  Head: { size: [0.32, 0.32, 0.32], color: "#f0f0f0" },
-  LeftUpperArm: { size: [0.16, 0.38, 0.16], color: "#d4d4d4" },
-  LeftLowerArm: { size: [0.14, 0.34, 0.14], color: "#bcbcbc" },
-  LeftHand: { size: [0.12, 0.12, 0.12], color: "#f0f0f0" },
-  RightUpperArm: { size: [0.16, 0.38, 0.16], color: "#d4d4d4" },
-  RightLowerArm: { size: [0.14, 0.34, 0.14], color: "#bcbcbc" },
-  RightHand: { size: [0.12, 0.12, 0.12], color: "#f0f0f0" },
-  LeftUpperLeg: { size: [0.2, 0.42, 0.2], color: "#222" },
-  LeftLowerLeg: { size: [0.18, 0.4, 0.18], color: "#1a1a1a" },
-  LeftFoot: { size: [0.22, 0.1, 0.32], color: "#111" },
-  RightUpperLeg: { size: [0.2, 0.42, 0.2], color: "#222" },
-  RightLowerLeg: { size: [0.18, 0.4, 0.18], color: "#1a1a1a" },
-  RightFoot: { size: [0.22, 0.1, 0.32], color: "#111" },
-};
-
-type JointNode = {
-  name: JointName;
-  position: [number, number, number];
-  children?: JointNode[];
-};
-
-const RIG: JointNode = {
-  name: "Root",
-  position: [0, 0, 0],
-  children: [
-    {
-      name: "LowerTorso",
-      position: [0, 0.2, 0],
-      children: [
-        {
-          name: "UpperTorso",
-          position: [0, 0.35, 0],
-          children: [
-            { name: "Head", position: [0, 0.42, 0] },
-            {
-              name: "LeftUpperArm",
-              position: [-0.42, 0.15, 0],
-              children: [
-                {
-                  name: "LeftLowerArm",
-                  position: [0, -0.38, 0],
-                  children: [{ name: "LeftHand", position: [0, -0.34, 0] }],
-                },
-              ],
-            },
-            {
-              name: "RightUpperArm",
-              position: [0.42, 0.15, 0],
-              children: [
-                {
-                  name: "RightLowerArm",
-                  position: [0, -0.38, 0],
-                  children: [{ name: "RightHand", position: [0, -0.34, 0] }],
-                },
-              ],
-            },
-          ],
-        },
-        {
-          name: "LeftUpperLeg",
-          position: [-0.16, -0.2, 0],
-          children: [
-            {
-              name: "LeftLowerLeg",
-              position: [0, -0.42, 0],
-              children: [{ name: "LeftFoot", position: [0, -0.4, 0.05] }],
-            },
-          ],
-        },
-        {
-          name: "RightUpperLeg",
-          position: [0.16, -0.2, 0],
-          children: [
-            {
-              name: "RightLowerLeg",
-              position: [0, -0.42, 0],
-              children: [{ name: "RightFoot", position: [0, -0.4, 0.05] }],
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
+const R15_URL = assetPath("/rigs/r15.glb");
+const R6_URL = assetPath("/rigs/r6.glb");
 
 function samplePoses(clip: AnimationClip, time: number) {
   const frames = clip.keyframes;
@@ -108,12 +21,11 @@ function samplePoses(clip: AnimationClip, time: number) {
   const b = frames[Math.min(i + 1, frames.length - 1)];
   const span = Math.max(b.time - a.time, 0.0001);
   const raw = THREE.MathUtils.clamp((t - a.time) / span, 0, 1);
-  // Smoothstep between authored keyframes for softer preview playback
   const alpha = raw * raw * (3 - 2 * raw);
   const map = new Map<JointName, THREE.Euler>();
   for (let j = 0; j < a.poses.length; j++) {
     const pa = a.poses[j];
-    const pb = b.poses[j];
+    const pb = b.poses[j] || pa;
     map.set(
       pa.joint,
       new THREE.Euler(
@@ -127,75 +39,168 @@ function samplePoses(clip: AnimationClip, time: number) {
   return map;
 }
 
-function JointMesh({
-  node,
-  poseMap,
-}: {
-  node: JointNode;
-  poseMap: Map<JointName, THREE.Euler> | null;
-}) {
-  const ref = useRef<THREE.Group>(null);
-  const mesh = JOINT_MESH[node.name];
-
-  useFrame(() => {
-    if (!ref.current || !poseMap) return;
-    const euler = poseMap.get(node.name);
-    if (euler) ref.current.rotation.copy(euler);
+function collectBones(root: THREE.Object3D) {
+  const map = new Map<string, THREE.Bone>();
+  root.traverse((obj) => {
+    if ((obj as THREE.Bone).isBone) {
+      map.set(obj.name, obj as THREE.Bone);
+    }
   });
-
-  return (
-    <group ref={ref} position={node.position}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={mesh.size} />
-        <meshStandardMaterial color={mesh.color} metalness={0.25} roughness={0.45} />
-      </mesh>
-      {node.children?.map((child) => (
-        <JointMesh key={child.name} node={child} poseMap={poseMap} />
-      ))}
-    </group>
-  );
+  return map;
 }
 
-function RigPlayer({
+function prepareScene(scene: THREE.Object3D) {
+  const root = scene.clone(true);
+  root.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      const mesh = obj as THREE.Mesh;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (mesh.material) {
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          const std = m as THREE.MeshStandardMaterial;
+          if (std.color) std.metalness = 0.12;
+          if ("roughness" in std) std.roughness = 0.55;
+        }
+      }
+    }
+  });
+  return root;
+}
+
+function SkinnedRigPlayer({
+  url,
   clip,
   playing,
   timeRef,
+  boneMap,
+  scale,
+  position,
+}: {
+  url: string;
+  clip: AnimationClip | null;
+  playing: boolean;
+  timeRef: React.MutableRefObject<number>;
+  boneMap: Record<string, string>;
+  scale: number;
+  position: [number, number, number];
+}) {
+  const { scene } = useGLTF(url);
+  const root = useMemo(() => prepareScene(scene), [scene]);
+  const bones = useMemo(() => collectBones(root), [root]);
+  const restRot = useMemo(() => {
+    const map = new Map<string, THREE.Euler>();
+    for (const [name, bone] of bones) {
+      map.set(name, bone.rotation.clone());
+    }
+    return map;
+  }, [bones]);
+
+  useFrame((_, delta) => {
+    if (!clip) {
+      // Reset to rest when no clip
+      for (const [name, bone] of bones) {
+        const rest = restRot.get(name);
+        if (rest) bone.rotation.copy(rest);
+      }
+      return;
+    }
+    if (playing) timeRef.current += delta;
+    const poseMap = samplePoses(clip, timeRef.current);
+    if (!poseMap) return;
+    for (const [joint, euler] of poseMap) {
+      const boneName = boneMap[joint];
+      const bone = boneName ? bones.get(boneName) : undefined;
+      const rest = boneName ? restRot.get(boneName) : undefined;
+      if (bone && rest) {
+        bone.rotation.order = "XYZ";
+        bone.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
+      }
+    }
+  });
+
+  return <primitive object={root} scale={scale} position={position} />;
+}
+
+function RigCanvas({
+  clip,
+  playing,
+  timeRef,
+  rig,
 }: {
   clip: AnimationClip | null;
   playing: boolean;
   timeRef: React.MutableRefObject<number>;
+  rig: RigType;
 }) {
-  const [poseMap, setPoseMap] = useState<Map<JointName, THREE.Euler> | null>(null);
-
-  useFrame((_, delta) => {
-    if (!clip) return;
-    if (playing) timeRef.current += delta;
-    setPoseMap(samplePoses(clip, timeRef.current));
-  });
+  const url = rig === "r6" ? R6_URL : R15_URL;
+  const boneMap = rig === "r6" ? R6_BONE_MAP : R15_BONE_MAP;
+  // R6 source is ~5 studs tall; R15 similar — fit in preview frame
+  const scale = rig === "r6" ? 0.4 : 0.42;
+  const position: [number, number, number] = rig === "r6" ? [0, 0, 0] : [0, 0, 0];
 
   return (
-    <group position={[0, 0.95, 0]}>
-      <JointMesh node={RIG} poseMap={poseMap} />
-    </group>
+    <SkinnedRigPlayer
+      url={url}
+      clip={clip}
+      playing={playing}
+      timeRef={timeRef}
+      boneMap={boneMap}
+      scale={scale}
+      position={position}
+    />
+  );
+}
+
+function PreviewFallback({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center px-6 text-center">
+      <div>
+        <p className="font-[family-name:var(--font-display)] text-sm text-white">{label}</p>
+        <p className="mt-2 text-xs text-muted">Loading real Roblox rig meshes…</p>
+      </div>
+    </div>
+  );
+}
+
+function PreviewError({ rig, message }: { rig: RigType; message: string }) {
+  return (
+    <div className="flex h-full items-center justify-center px-6 text-center">
+      <div className="max-w-sm rounded-2xl border border-brand/40 bg-brand/10 px-4 py-5">
+        <p className="font-[family-name:var(--font-display)] text-sm text-white">
+          {rig.toUpperCase()} rig failed to load
+        </p>
+        <p className="mt-2 text-xs text-muted">{message}</p>
+        <p className="mt-3 text-[11px] text-muted">
+          Expected asset: <code className="text-white/80">{rig === "r6" ? R6_URL : R15_URL}</code>
+        </p>
+      </div>
+    </div>
   );
 }
 
 export function AnimationPreview({
   clip,
+  rig = "r15",
   autoPlay = true,
   generating = false,
 }: {
   clip: AnimationClip | null;
+  rig?: RigType;
   autoPlay?: boolean;
   generating?: boolean;
 }) {
   const [playing, setPlaying] = useState(autoPlay);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const timeRef = useRef(0);
+  const activeRig: RigType = clip?.rig || rig;
 
   useEffect(() => {
     setPlaying(autoPlay);
     timeRef.current = 0;
-  }, [clip?.id, autoPlay]);
+    setLoadError(null);
+  }, [clip?.id, autoPlay, activeRig]);
 
   const label = useMemo(() => clip?.name || "No animation yet", [clip]);
 
@@ -207,7 +212,7 @@ export function AnimationPreview({
       <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-muted">
-            {generating ? "Generating" : "Preview"}
+            {generating ? "Generating" : "Preview"} · {activeRig.toUpperCase()}
           </p>
           <p className="font-[family-name:var(--font-display)] text-sm text-white">{label}</p>
         </div>
@@ -227,32 +232,92 @@ export function AnimationPreview({
         </div>
       </div>
       <div
-        className={`h-[440px] w-full bg-[radial-gradient(circle_at_center,#1f0606_0%,#050505_72%)] transition ${
-          generating ? "ring-1 ring-brand/40" : ""
-        }`}
+        className={`relative h-[440px] w-full transition ${generating ? "ring-1 ring-brand/40" : ""}`}
+        style={{
+          background:
+            "radial-gradient(circle at center, color-mix(in srgb, var(--red) 16%, var(--bg)) 0%, var(--bg) 72%)",
+        }}
       >
-        <Canvas camera={{ position: [2.4, 1.8, 3.2], fov: 42 }} shadows>
-          <color attach="background" args={["#070707"]} />
-          <ambientLight intensity={0.55} />
-          <directionalLight
-            castShadow
-            position={[4, 6, 3]}
-            intensity={1.45}
-            color="#ffb0b0"
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
-          />
-          <spotLight position={[-3, 4, -2]} intensity={0.95} color="#e10600" />
-          <pointLight position={[0, 2.2, 1.5]} intensity={0.35} color="#ff3b3b" />
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-            <circleGeometry args={[3.2, 64]} />
-            <meshStandardMaterial color="#121212" metalness={0.45} roughness={0.75} />
-          </mesh>
-          <RigPlayer clip={clip} playing={playing} timeRef={timeRef} />
-          <ContactShadows opacity={0.5} scale={8} blur={2.6} far={4} color="#e10600" />
-          <OrbitControls enablePan={false} minDistance={2} maxDistance={7} target={[0, 1.1, 0]} />
-        </Canvas>
+        {loadError ? (
+          <PreviewError rig={activeRig} message={loadError} />
+        ) : (
+          <Suspense fallback={<PreviewFallback label={`Loading ${activeRig.toUpperCase()}…`} />}>
+            <Canvas
+              key={activeRig}
+              camera={{ position: [2.6, 2.0, 3.4], fov: 40 }}
+              shadows
+              onCreated={() => setLoadError(null)}
+            >
+              <color attach="background" args={["#070707"]} />
+              <ambientLight intensity={0.6} />
+              <directionalLight
+                castShadow
+                position={[4, 7, 3]}
+                intensity={1.5}
+                color="#ffffff"
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
+              />
+              <spotLight position={[-3, 5, -2]} intensity={0.7} color="#ffffff" />
+              <pointLight position={[0, 2.4, 1.6]} intensity={0.4} color="#ffffff" />
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+                <circleGeometry args={[3.2, 64]} />
+                <meshStandardMaterial color="#121212" metalness={0.45} roughness={0.75} />
+              </mesh>
+              <RigLoadGuard rig={activeRig} onError={setLoadError}>
+                <RigCanvas clip={clip} playing={playing} timeRef={timeRef} rig={activeRig} />
+              </RigLoadGuard>
+              <ContactShadows opacity={0.55} scale={8} blur={2.6} far={4} color="#000000" />
+              <OrbitControls enablePan={false} minDistance={2} maxDistance={8} target={[0, 1.2, 0]} />
+            </Canvas>
+          </Suspense>
+        )}
       </div>
     </div>
   );
 }
+
+/** Catches GLB parse / runtime errors without rendering a box placeholder. */
+function RigLoadGuard({
+  children,
+  rig,
+  onError,
+}: {
+  children: React.ReactNode;
+  rig: RigType;
+  onError: (msg: string) => void;
+}) {
+  return (
+    <ErrorBoundary
+      resetKey={rig}
+      onError={(err) => onError(err.message || `Could not load ${rig.toUpperCase()} GLB.`)}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; onError: (e: Error) => void; resetKey: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    this.props.onError(error);
+  }
+  componentDidUpdate(prev: { resetKey: string }) {
+    if (prev.resetKey !== this.props.resetKey && this.state.failed) {
+      this.setState({ failed: false });
+    }
+  }
+  render() {
+    if (this.state.failed) return null;
+    return this.props.children;
+  }
+}
+
+useGLTF.preload(R15_URL);
+useGLTF.preload(R6_URL);

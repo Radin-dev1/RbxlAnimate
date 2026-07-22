@@ -2,23 +2,90 @@ export type Plan = "free" | "pro";
 
 export type AnimStyle = "emote" | "combat" | "idle" | "walk";
 
+export type RigType = "r15" | "r6";
+
+/** Canonical joint names used in clips. R15 uses full set; R6 uses a subset. */
 export type JointName =
   | "Root"
   | "LowerTorso"
   | "UpperTorso"
+  | "Torso"
   | "Head"
   | "LeftUpperArm"
   | "LeftLowerArm"
   | "LeftHand"
+  | "LeftArm"
   | "RightUpperArm"
   | "RightLowerArm"
   | "RightHand"
+  | "RightArm"
   | "LeftUpperLeg"
   | "LeftLowerLeg"
   | "LeftFoot"
+  | "LeftLeg"
   | "RightUpperLeg"
   | "RightLowerLeg"
-  | "RightFoot";
+  | "RightFoot"
+  | "RightLeg";
+
+export const R15_JOINTS: JointName[] = [
+  "Root",
+  "LowerTorso",
+  "UpperTorso",
+  "Head",
+  "LeftUpperArm",
+  "LeftLowerArm",
+  "LeftHand",
+  "RightUpperArm",
+  "RightLowerArm",
+  "RightHand",
+  "LeftUpperLeg",
+  "LeftLowerLeg",
+  "LeftFoot",
+  "RightUpperLeg",
+  "RightLowerLeg",
+  "RightFoot",
+];
+
+export const R6_JOINTS: JointName[] = [
+  "Root",
+  "Torso",
+  "Head",
+  "LeftArm",
+  "RightArm",
+  "LeftLeg",
+  "RightLeg",
+];
+
+/** Map clip joint → glTF / Roblox bone name */
+export const R15_BONE_MAP: Record<string, string> = {
+  Root: "HumanoidRootPart",
+  LowerTorso: "LowerTorso",
+  UpperTorso: "UpperTorso",
+  Head: "Head",
+  LeftUpperArm: "LeftUpperArm",
+  LeftLowerArm: "LeftLowerArm",
+  LeftHand: "LeftHand",
+  RightUpperArm: "RightUpperArm",
+  RightLowerArm: "RightLowerArm",
+  RightHand: "RightHand",
+  LeftUpperLeg: "LeftUpperLeg",
+  LeftLowerLeg: "LeftLowerLeg",
+  LeftFoot: "LeftFoot",
+  RightUpperLeg: "RightUpperLeg",
+  RightLowerLeg: "RightLowerLeg",
+  RightFoot: "RightFoot",
+};
+
+export const R6_BONE_MAP: Record<string, string> = {
+  Root: "HumanoidRootPart",
+  Torso: "Torso",
+  Head: "Head",
+  LeftArm: "LeftArm",
+  RightArm: "RightArm",
+  LeftLeg: "LeftLeg",
+  RightLeg: "RightLeg",
+};
 
 export interface JointPose {
   joint: JointName;
@@ -38,6 +105,7 @@ export interface AnimationClip {
   name: string;
   prompt: string;
   style: AnimStyle;
+  rig: RigType;
   duration: number;
   quality: "standard" | "high";
   source: "text" | "video";

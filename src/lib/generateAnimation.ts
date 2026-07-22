@@ -1,23 +1,8 @@
-import type { AnimStyle, AnimationClip, JointName, Keyframe, JointPose } from "./types";
+import type { AnimStyle, AnimationClip, JointName, Keyframe, JointPose, RigType } from "./types";
+import { R15_JOINTS } from "./types";
+import { r15PosesToR6 } from "./rigMap";
 
-const ALL_JOINTS: JointName[] = [
-  "Root",
-  "LowerTorso",
-  "UpperTorso",
-  "Head",
-  "LeftUpperArm",
-  "LeftLowerArm",
-  "LeftHand",
-  "RightUpperArm",
-  "RightLowerArm",
-  "RightHand",
-  "LeftUpperLeg",
-  "LeftLowerLeg",
-  "LeftFoot",
-  "RightUpperLeg",
-  "RightLowerLeg",
-  "RightFoot",
-];
+const ALL_JOINTS: JointName[] = R15_JOINTS;
 
 type MotionVerb =
   | "wave"
@@ -783,9 +768,11 @@ export function generateAnimationFromPrompt(opts: {
   duration: number;
   quality: "standard" | "high";
   source?: "text" | "video";
+  rig?: RigType;
 }): AnimationClip {
+  const rig: RigType = opts.rig || "r15";
   const style = detectStyle(opts.prompt, opts.style);
-  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|v2`);
+  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v2`);
   const rand = seeded(seed);
   const high = opts.quality === "high";
   const intensityBoost = high ? 1.12 : 0.95;
@@ -804,16 +791,21 @@ export function generateAnimationFromPrompt(opts: {
     const t = i / frames;
     // Slight arc bias for Pro: sample with eased temporal distribution
     const sampleT = high ? ease("smooth", t) * 0.15 + t * 0.85 : t;
-    const poses = sampleTimeline(phases, sampleT, high, style, loopable);
+    let poses = sampleTimeline(phases, sampleT, high, style, loopable);
+    if (rig === "r6") poses = r15PosesToR6(poses);
     keyframes.push({ time: Number((t * duration).toFixed(4)), poses: clonePose(poses) });
   }
 
   // Ensure clean settle on non-looping clips
   if (!loopable) {
     const last = keyframes[keyframes.length - 1];
+    const rest =
+      rig === "r6"
+        ? r15PosesToR6(restPose())
+        : restPose();
     keyframes[keyframes.length - 1] = {
       time: duration,
-      poses: blend(last.poses, restPose(), high ? 0.92 : 0.8),
+      poses: blend(last.poses, rest, high ? 0.92 : 0.8),
     };
   } else {
     // Close the loop: match first pose at end
@@ -835,6 +827,7 @@ export function generateAnimationFromPrompt(opts: {
     name: short,
     prompt: opts.prompt.trim(),
     style,
+    rig,
     duration,
     quality: opts.quality,
     source: opts.source || "text",
@@ -847,6 +840,7 @@ export function clipToRobloxExport(clip: AnimationClip) {
   return {
     format: "rbxlAnimate.keyframesequence.v1",
     name: clip.name,
+    rig: clip.rig || "r15",
     looped: clip.style === "walk" || clip.style === "idle",
     priority: "Action",
     length: clip.duration,
@@ -862,6 +856,7 @@ export function clipToRobloxExport(clip: AnimationClip) {
     meta: {
       prompt: clip.prompt,
       style: clip.style,
+      rig: clip.rig || "r15",
       quality: clip.quality,
       source: clip.source,
       createdAt: clip.createdAt,
