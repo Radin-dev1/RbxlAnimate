@@ -78,6 +78,6 @@ GitHub Pages serves **static files only**. This project uses `output: 'export'`.
 
 See [`plugin/README.md`](plugin/README.md): Roblox-only login, apply animations in Studio, generate backgrounds.
 
-## License
+## License  ,
 
 Private / all rights reserved unless otherwise noted. Rig authors retain rights to their original Blender assets; shipped GLBs are optimized web previews for this app.
