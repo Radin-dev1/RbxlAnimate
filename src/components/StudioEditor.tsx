@@ -8,6 +8,14 @@ import { generateAnimationFromPrompt, clipToRobloxExport } from "@/lib/generateA
 import { useAppStore } from "@/lib/store";
 import type { AnimStyle } from "@/lib/types";
 
+const PROMPT_CHIPS = [
+  "spin then kick then victory",
+  "wave both arms then point at camera",
+  "combat: punch then dodge then slash",
+  "idle breathe with subtle head look",
+  "walk cycle confident stride",
+];
+
 export function StudioEditor() {
   const user = useAppStore((s) => s.user);
   const settings = useAppStore((s) => s.settings);
@@ -63,8 +71,7 @@ export function StudioEditor() {
 
     setBusy(true);
     try {
-      // Client-side generation (static GitHub Pages has no API routes)
-      await new Promise((r) => setTimeout(r, 280));
+      await new Promise((r) => setTimeout(r, highQualityDelay(quality)));
       const clip = generateAnimationFromPrompt({
         prompt:
           source === "video"
@@ -97,30 +104,31 @@ export function StudioEditor() {
 
   return (
     <div className="relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 surface-grid opacity-70" />
       <div className="pointer-events-none absolute inset-0">
-        <div className="animate-pulse-red absolute -left-32 top-16 h-72 w-72 rounded-full bg-brand/15 blur-3xl" />
-        <div className="animate-float absolute -right-16 top-28 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
+        <div className="animate-pulse-red absolute -left-28 top-10 h-[22rem] w-[22rem] rounded-full bg-brand/20 blur-[90px]" />
+        <div className="animate-drift absolute -right-20 top-24 h-[26rem] w-[26rem] rounded-full bg-brand/12 blur-[100px]" />
+        <div className="animate-float absolute bottom-10 left-1/3 h-48 w-48 rounded-full bg-brand/8 blur-[70px]" />
       </div>
 
-      <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-8">
-        <div className="mb-8 max-w-3xl">
-          <p className="mb-2 font-[family-name:var(--font-display)] text-sm font-semibold tracking-[0.28em] text-brand brand-glow">
-            rbxlAnimate
-          </p>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-black leading-[1.05] tracking-tight text-white md:text-5xl">
-            Make the move.
+      <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-10">
+        <div className="stagger-1 mb-10 max-w-3xl">
+          <p className="eyebrow brand-glow mb-4">rbxlAnimate</p>
+          <h1 className="hero-brand text-[clamp(2.6rem,7vw,4.6rem)] text-white">
+            Make the
+            <span className="block text-brand brand-glow">move.</span>
           </h1>
-          <p className="mt-3 max-w-xl text-base text-muted md:text-lg">
-            Prompt a Roblox animation, scrub the R15-style preview, export clean KeyframeSequence data —
-            no watermarks.
+          <p className="mt-4 max-w-xl text-base text-muted md:text-lg">
+            Prompt multi-step Roblox motion. Preview on R15. Export clean KeyframeSequence JSON —
+            never watermarked.
           </p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+        <div className="stagger-2 grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
           <div className="space-y-4">
-            <AnimationPreview clip={activeClip} autoPlay={settings.autoPlayPreview} />
+            <AnimationPreview clip={activeClip} autoPlay={settings.autoPlayPreview} generating={busy} />
             {library.length > 0 && (
-              <div className="panel panel-inset p-3">
+              <div className="panel panel-inset p-3.5">
                 <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-muted">Recent</p>
                 <div className="flex flex-wrap gap-2">
                   {library.slice(0, 8).map((clip) => (
@@ -128,10 +136,10 @@ export function StudioEditor() {
                       key={clip.id}
                       type="button"
                       onClick={() => setActiveClip(clip.id)}
-                      className={`rounded-lg border px-3 py-1 text-xs transition ${
+                      className={`rounded-xl border px-3 py-1.5 text-xs transition ${
                         clip.id === activeClip?.id
-                          ? "border-brand bg-brand/20 text-white"
-                          : "border-border text-muted hover:border-brand/60"
+                          ? "border-brand bg-brand/20 text-white shadow-[0_0_20px_rgba(225,6,0,0.2)]"
+                          : "border-border text-muted hover:border-brand/60 hover:text-white"
                       }`}
                     >
                       {clip.name}
@@ -142,10 +150,10 @@ export function StudioEditor() {
             )}
           </div>
 
-          <div className="panel space-y-5 p-5 md:p-6">
+          <div className="panel panel-hot stagger-3 space-y-5 p-5 md:p-6">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-brand">Maker</p>
-              <h2 className="mt-1 font-[family-name:var(--font-display)] text-2xl font-bold text-white">
+              <p className="eyebrow">Maker</p>
+              <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-white">
                 Describe · preview · export
               </h2>
             </div>
@@ -153,12 +161,25 @@ export function StudioEditor() {
             <label className="block space-y-2">
               <span className="text-sm text-muted">Prompt</span>
               <textarea
-                className="input min-h-[110px] resize-y"
+                className="input min-h-[118px] resize-y"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="wave both arms, hop twice, then point at camera"
+                placeholder="spin then kick then victory pose"
               />
             </label>
+
+            <div className="flex flex-wrap gap-2">
+              {PROMPT_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  className="rounded-lg border border-border/80 bg-black/30 px-2.5 py-1 text-[11px] text-muted transition hover:border-brand/50 hover:text-white"
+                  onClick={() => setPrompt(chip)}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <label className="space-y-2">
@@ -177,7 +198,7 @@ export function StudioEditor() {
               <label className="space-y-2">
                 <span className="text-sm text-muted">Duration ({duration.toFixed(1)}s)</span>
                 <input
-                  className="mt-3 w-full accent-[var(--red)]"
+                  className="range mt-4"
                   type="range"
                   min={0.8}
                   max={6}
@@ -191,7 +212,7 @@ export function StudioEditor() {
             <label className="block space-y-2">
               <span className="text-sm text-muted">Intensity ({intensity.toFixed(1)}x)</span>
               <input
-                className="w-full accent-[var(--red)]"
+                className="range"
                 type="range"
                 min={0.6}
                 max={1.4}
@@ -201,7 +222,7 @@ export function StudioEditor() {
               />
             </label>
 
-            <div className="rounded-xl border border-border bg-black/35 p-3">
+            <div className="rounded-2xl border border-border bg-black/40 p-3.5">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm font-semibold">Video → animation</p>
                 <span className="rounded-md bg-brand/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
@@ -225,7 +246,7 @@ export function StudioEditor() {
             </div>
 
             {error && (
-              <p className="rounded-lg border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-red-100">
+              <p className="rounded-xl border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-red-100">
                 {error}{" "}
                 {error.includes("Sign in") && (
                   <Link href="/login" className="underline">
@@ -237,7 +258,7 @@ export function StudioEditor() {
 
             <div className="flex flex-wrap gap-2">
               <button
-                className="btn-primary"
+                className={`btn-primary ${busy ? "is-busy" : ""}`}
                 disabled={busy}
                 type="button"
                 onClick={() => generate("text")}
@@ -263,4 +284,8 @@ export function StudioEditor() {
       <BuyUsageModal open={buyOpen} onClose={() => setBuyOpen(false)} />
     </div>
   );
+}
+
+function highQualityDelay(quality: "standard" | "high") {
+  return quality === "high" ? 520 : 320;
 }

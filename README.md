@@ -19,6 +19,7 @@ Local builds use no `basePath`. CI sets `GITHUB_PAGES=true` so assets resolve un
 ## What's working
 
 - **Homepage = maker** — prompt → R15-style 3D preview → export
+- **Procedural AI** — motion grammar (verbs / body parts / multi-step `then` sequences), anticipation → action → follow-through → settle, Pro high-quality frames
 - **No watermarks** on exports (`.rbxlAnimate.json` KeyframeSequence package)
 - **Auth:** demo email sign-in (browser localStorage). OAuth needs a backend later.
 - **Usage:** Free 10/mo · Pro 150/mo (demo upgrade / packs on Pages)

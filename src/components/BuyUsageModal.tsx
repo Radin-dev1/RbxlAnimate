@@ -17,12 +17,14 @@ export function BuyUsageModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-      <div className="panel w-full max-w-lg p-6 shadow-[0_0_60px_rgba(225,6,0,0.25)]">
-        <div className="mb-4 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+      <div className="panel panel-hot w-full max-w-lg p-6 shadow-[0_0_80px_rgba(225,6,0,0.28)]">
+        <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.25em] text-brand">Usage</p>
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold">Buy more generations</h2>
+            <p className="eyebrow">Usage</p>
+            <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight">
+              Buy more generations
+            </h2>
             <p className="mt-1 text-sm text-muted">
               Demo checkout on GitHub Pages — packs credit instantly. Real Stripe needs a backend later.
             </p>
@@ -37,7 +39,7 @@ export function BuyUsageModal({
             <button
               key={pack.id}
               type="button"
-              className="flex items-center justify-between rounded-xl border border-border bg-black/40 px-4 py-3 text-left transition hover:border-brand"
+              className="flex items-center justify-between rounded-2xl border border-border bg-black/45 px-4 py-3.5 text-left transition hover:border-brand hover:shadow-[0_0_24px_rgba(225,6,0,0.15)]"
               onClick={() => {
                 addUsage(pack.generations);
                 onClose();
@@ -53,9 +55,11 @@ export function BuyUsageModal({
         </div>
 
         {plan !== "pro" && (
-          <div className="mt-5 rounded-xl border border-brand/40 bg-brand/10 p-4">
+          <div className="mt-5 rounded-2xl border border-brand/40 bg-brand/10 p-4">
             <p className="font-semibold">Or go Pro — $15.99/mo</p>
-            <p className="mt-1 text-sm text-muted">150 gens/mo, video→anim, better quality animations.</p>
+            <p className="mt-1 text-sm text-muted">
+              150 gens/mo, video→anim, high-quality multi-phase motion.
+            </p>
             <button
               className="btn-primary mt-3 text-sm"
               type="button"

@@ -107,7 +107,9 @@ function samplePoses(clip: AnimationClip, time: number) {
   const a = frames[i];
   const b = frames[Math.min(i + 1, frames.length - 1)];
   const span = Math.max(b.time - a.time, 0.0001);
-  const alpha = THREE.MathUtils.clamp((t - a.time) / span, 0, 1);
+  const raw = THREE.MathUtils.clamp((t - a.time) / span, 0, 1);
+  // Smoothstep between authored keyframes for softer preview playback
+  const alpha = raw * raw * (3 - 2 * raw);
   const map = new Map<JointName, THREE.Euler>();
   for (let j = 0; j < a.poses.length; j++) {
     const pa = a.poses[j];
@@ -181,9 +183,11 @@ function RigPlayer({
 export function AnimationPreview({
   clip,
   autoPlay = true,
+  generating = false,
 }: {
   clip: AnimationClip | null;
   autoPlay?: boolean;
+  generating?: boolean;
 }) {
   const [playing, setPlaying] = useState(autoPlay);
   const timeRef = useRef(0);
@@ -197,9 +201,14 @@ export function AnimationPreview({
 
   return (
     <div className="panel relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 z-[1]">
+        <div className="animate-preview-glow absolute left-1/2 top-1/3 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/20 blur-[70px]" />
+      </div>
       <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 py-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-muted">Preview</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted">
+            {generating ? "Generating" : "Preview"}
+          </p>
           <p className="font-[family-name:var(--font-display)] text-sm text-white">{label}</p>
         </div>
         <div className="flex gap-2">
@@ -217,25 +226,30 @@ export function AnimationPreview({
           </button>
         </div>
       </div>
-      <div className="h-[420px] w-full bg-[radial-gradient(circle_at_center,#1a0505_0%,#050505_70%)]">
+      <div
+        className={`h-[440px] w-full bg-[radial-gradient(circle_at_center,#1f0606_0%,#050505_72%)] transition ${
+          generating ? "ring-1 ring-brand/40" : ""
+        }`}
+      >
         <Canvas camera={{ position: [2.4, 1.8, 3.2], fov: 42 }} shadows>
-          <color attach="background" args={["#080808"]} />
+          <color attach="background" args={["#070707"]} />
           <ambientLight intensity={0.55} />
           <directionalLight
             castShadow
             position={[4, 6, 3]}
-            intensity={1.4}
+            intensity={1.45}
             color="#ffb0b0"
             shadow-mapSize-width={1024}
             shadow-mapSize-height={1024}
           />
-          <spotLight position={[-3, 4, -2]} intensity={0.8} color="#e10600" />
+          <spotLight position={[-3, 4, -2]} intensity={0.95} color="#e10600" />
+          <pointLight position={[0, 2.2, 1.5]} intensity={0.35} color="#ff3b3b" />
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
             <circleGeometry args={[3.2, 64]} />
-            <meshStandardMaterial color="#141414" metalness={0.4} roughness={0.8} />
+            <meshStandardMaterial color="#121212" metalness={0.45} roughness={0.75} />
           </mesh>
           <RigPlayer clip={clip} playing={playing} timeRef={timeRef} />
-          <ContactShadows opacity={0.45} scale={8} blur={2.5} far={4} color="#e10600" />
+          <ContactShadows opacity={0.5} scale={8} blur={2.6} far={4} color="#e10600" />
           <OrbitControls enablePan={false} minDistance={2} maxDistance={7} target={[0, 1.1, 0]} />
         </Canvas>
       </div>

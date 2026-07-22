@@ -33,16 +33,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-[calc(100vh-64px)] max-w-md flex-col justify-center px-4 py-12">
+    <div className="page-enter relative mx-auto flex min-h-[calc(100vh-64px)] max-w-md flex-col justify-center px-4 py-12">
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="animate-pulse-red absolute left-1/2 top-24 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
+        <div className="animate-pulse-red absolute left-1/2 top-24 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/18 blur-[80px]" />
       </div>
 
-      <div className="panel p-6 md:p-7">
-        <p className="font-[family-name:var(--font-display)] text-xs font-semibold tracking-[0.28em] text-brand">
-          rbxlAnimate
-        </p>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold">Sign in</h1>
+      <div className="panel panel-hot p-6 md:p-8">
+        <p className="eyebrow brand-glow">rbxlAnimate</p>
+        <h1 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">
+          Sign in
+        </h1>
         <p className="mt-2 text-sm text-muted">
           Demo email sign-in (saved in this browser). OAuth (GitHub / Google / Roblox) needs a backend —
           coming when you leave static Pages.
@@ -57,7 +57,7 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <button className="btn-primary w-full" disabled={busy} type="submit">
+          <button className={`btn-primary w-full ${busy ? "is-busy" : ""}`} disabled={busy} type="submit">
             {busy ? "Signing in…" : "Continue with email"}
           </button>
         </form>

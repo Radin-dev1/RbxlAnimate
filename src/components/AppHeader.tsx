@@ -24,11 +24,11 @@ export function AppHeader() {
   const usageRemaining = useAppStore((s) => s.usageRemaining);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-black/75 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-black/70 backdrop-blur-2xl">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5">
         <Link
           href="/"
-          className="group font-[family-name:var(--font-display)] text-lg font-black tracking-[0.04em]"
+          className="group font-[family-name:var(--font-display)] text-lg font-black tracking-[0.02em]"
         >
           <span className="text-brand brand-glow transition group-hover:brightness-110">rbxl</span>
           <span className="text-white">Animate</span>
@@ -41,8 +41,10 @@ export function AppHeader() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                  active ? "bg-brand/20 text-white" : "text-muted hover:text-white"
+                className={`rounded-xl px-3.5 py-1.5 text-sm transition ${
+                  active
+                    ? "bg-brand/20 text-white shadow-[0_0_20px_rgba(225,6,0,0.15)]"
+                    : "text-muted hover:bg-white/5 hover:text-white"
                 }`}
               >
                 {link.label}
@@ -52,9 +54,9 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden rounded-lg border border-border px-3 py-1 text-xs text-muted sm:block">
-            <span className={plan === "pro" ? "text-brand" : ""}>{plan.toUpperCase()}</span>
-            <span className="mx-1 text-border">·</span>
+          <div className="hidden rounded-xl border border-border/80 bg-black/40 px-3 py-1.5 text-xs text-muted sm:block">
+            <span className={plan === "pro" ? "font-semibold text-brand" : ""}>{plan.toUpperCase()}</span>
+            <span className="mx-1.5 text-border">·</span>
             <span>{usageRemaining} gens</span>
           </div>
           {user ? (

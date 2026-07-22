@@ -23,10 +23,12 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
+    <div className="page-enter mx-auto max-w-3xl space-y-5 px-4 py-12">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.25em] text-brand">Settings</p>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">Control panel</h1>
+        <p className="eyebrow">Settings</p>
+        <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">
+          Control panel
+        </h1>
       </div>
 
       <section className="panel space-y-4 p-5">
@@ -40,19 +42,16 @@ export default function SettingsPage() {
             Sign in
           </Link>
         )}
-        <label className="flex items-center justify-between gap-3 text-sm">
-          <span>Link Roblox account (required for Studio plugin)</span>
-          <input
-            type="checkbox"
-            checked={settings.robloxLinked}
-            onChange={(e) =>
-              updateSettings({
-                robloxLinked: e.target.checked,
-                robloxUsername: e.target.checked ? settings.robloxUsername || "RobloxUser" : "",
-              })
-            }
-          />
-        </label>
+        <Toggle
+          label="Link Roblox account (required for Studio plugin)"
+          checked={settings.robloxLinked}
+          onChange={(v) =>
+            updateSettings({
+              robloxLinked: v,
+              robloxUsername: v ? settings.robloxUsername || "RobloxUser" : "",
+            })
+          }
+        />
         {settings.robloxLinked && (
           <input
             className="input"
@@ -219,7 +218,14 @@ function Toggle({
   return (
     <label className="flex items-center justify-between gap-3 text-sm">
       <span>{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        className="toggle"
+        data-on={checked ? "true" : "false"}
+        onClick={() => onChange(!checked)}
+      />
     </label>
   );
 }

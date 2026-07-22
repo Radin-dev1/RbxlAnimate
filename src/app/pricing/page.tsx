@@ -11,25 +11,28 @@ export default function PricingPage() {
   const [buyOpen, setBuyOpen] = useState(false);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12">
+    <div className="page-enter relative mx-auto max-w-5xl px-4 py-14">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="animate-pulse-red absolute left-1/2 top-8 h-64 w-64 -translate-x-1/2 rounded-full bg-brand/15 blur-[90px]" />
+      </div>
+
       <div className="text-center">
-        <p className="font-[family-name:var(--font-display)] text-xs font-semibold tracking-[0.3em] text-brand">
-          Pro
-        </p>
-        <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-bold md:text-5xl">
-          Better animations. More usage.
+        <p className="eyebrow brand-glow">Pro</p>
+        <h1 className="hero-brand mt-3 text-[clamp(2.2rem,5vw,3.6rem)] text-white">
+          Better motion.
+          <span className="block text-brand">More usage.</span>
         </h1>
-        <p className="mx-auto mt-3 max-w-xl text-muted">
-          Every export is watermark-free. Pro unlocks video→animation, high quality, and a bigger monthly pool.
-          Billing on GitHub Pages is demo-only until a Stripe backend is added.
+        <p className="mx-auto mt-4 max-w-xl text-muted">
+          Every export is watermark-free. Pro unlocks video→animation, high-quality timelines, and a bigger
+          monthly pool. Billing on GitHub Pages is demo-only until a Stripe backend is added.
         </p>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-2">
-        <div className="panel p-6">
+      <div className="mt-12 grid gap-5 md:grid-cols-2">
+        <div className="panel p-7">
           <h2 className="font-[family-name:var(--font-display)] text-xl">Free</h2>
-          <p className="mt-2 text-3xl font-bold">$0</p>
-          <ul className="mt-4 space-y-2 text-sm text-muted">
+          <p className="mt-3 text-4xl font-bold tracking-tight">$0</p>
+          <ul className="mt-6 space-y-2.5 text-sm text-muted">
             <li>{FREE_MONTHLY_USAGE} generations / month</li>
             <li>Text → animation</li>
             <li>Standard quality</li>
@@ -37,33 +40,33 @@ export default function PricingPage() {
             <li>Buy more usage anytime</li>
           </ul>
           {plan === "free" ? (
-            <p className="mt-6 text-sm text-brand">Current plan</p>
+            <p className="mt-7 text-sm font-semibold text-brand">Current plan</p>
           ) : (
-            <p className="mt-6 text-sm text-muted">Included forever</p>
+            <p className="mt-7 text-sm text-muted">Included forever</p>
           )}
         </div>
 
-        <div className="panel relative overflow-hidden p-6 shadow-[0_0_40px_rgba(225,6,0,0.2)]">
-          <div className="absolute right-4 top-4 rounded-md bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+        <div className="panel panel-hot relative overflow-hidden p-7">
+          <div className="absolute right-4 top-4 rounded-md bg-brand px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">
             Recommended
           </div>
           <h2 className="font-[family-name:var(--font-display)] text-xl text-brand">Pro</h2>
-          <p className="mt-2 text-3xl font-bold">
+          <p className="mt-3 text-4xl font-bold tracking-tight">
             ${PRO_MONTHLY_PRICE}
             <span className="text-base font-normal text-muted">/mo</span>
           </p>
           <p className="text-sm text-muted">or ${PRO_YEARLY_PRICE}/year</p>
-          <ul className="mt-4 space-y-2 text-sm text-muted">
+          <ul className="mt-6 space-y-2.5 text-sm text-muted">
             <li>{PRO_MONTHLY_USAGE} generations / month</li>
             <li>Video → animation</li>
-            <li>Better / high-quality animations</li>
-            <li>Priority generation</li>
+            <li>High-quality multi-phase timelines</li>
+            <li>Secondary motion & smoother arcs</li>
             <li>Watermark-free export</li>
             <li>Buy more usage when you run out</li>
           </ul>
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-7 flex flex-wrap gap-2">
             {plan === "pro" ? (
-              <p className="text-sm text-brand">You&apos;re on Pro</p>
+              <p className="text-sm font-semibold text-brand">You&apos;re on Pro</p>
             ) : (
               <>
                 <button className="btn-primary" type="button" onClick={() => upgradeToPro()}>
