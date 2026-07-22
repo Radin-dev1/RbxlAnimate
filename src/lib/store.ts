@@ -5,6 +5,11 @@ import { persist } from "zustand/middleware";
 import type { AnimStyle, AnimationClip, Plan } from "./types";
 import { FREE_MONTHLY_USAGE, PRO_MONTHLY_USAGE } from "./types";
 
+export interface DemoUser {
+  email: string;
+  name: string;
+}
+
 interface UserSettings {
   defaultStyle: AnimStyle;
   autoPlayPreview: boolean;
@@ -20,12 +25,15 @@ interface UserSettings {
 }
 
 interface AppState {
+  user: DemoUser | null;
   plan: Plan;
   usageRemaining: number;
   periodResetAt: string;
   library: AnimationClip[];
   activeClipId: string | null;
   settings: UserSettings;
+  signIn: (email: string) => void;
+  signOut: () => void;
   setPlan: (plan: Plan) => void;
   setUsage: (n: number) => void;
   consumeUsage: (n?: number) => boolean;
@@ -61,12 +69,24 @@ function nextPeriodReset() {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      user: null,
       plan: "free",
       usageRemaining: FREE_MONTHLY_USAGE,
       periodResetAt: nextPeriodReset(),
       library: [],
       activeClipId: null,
       settings: defaultSettings,
+      signIn: (email) => {
+        const cleaned = email.trim().toLowerCase();
+        if (!cleaned.includes("@")) return;
+        set({
+          user: {
+            email: cleaned,
+            name: cleaned.split("@")[0] || "maker",
+          },
+        });
+      },
+      signOut: () => set({ user: null }),
       setPlan: (plan) => set({ plan }),
       setUsage: (usageRemaining) => set({ usageRemaining }),
       consumeUsage: (n = 1) => {

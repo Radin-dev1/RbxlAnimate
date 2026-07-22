@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { useAppStore } from "@/lib/store";
 import { BuyUsageModal } from "@/components/BuyUsageModal";
 import type { AnimStyle } from "@/lib/types";
 import { FREE_MONTHLY_USAGE, PRO_MONTHLY_USAGE } from "@/lib/types";
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const user = useAppStore((s) => s.user);
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
   const plan = useAppStore((s) => s.plan);
@@ -25,16 +25,21 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
       <div>
-        <p className="text-xs uppercase tracking-[0.25em] text-brand">Settings</p>
+        <p className="text-[11px] uppercase tracking-[0.25em] text-brand">Settings</p>
         <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">Control panel</h1>
       </div>
 
       <section className="panel space-y-4 p-5">
         <h2 className="font-[family-name:var(--font-display)] text-lg">Account</h2>
         <p className="text-sm text-muted">
-          Signed in as {session?.user?.email || session?.user?.name || "guest"}{" "}
-          {session ? "" : "(sign in to sync across devices)"}
+          Signed in as {user?.email || user?.name || "guest"}{" "}
+          {user ? "(demo session in this browser)" : "(sign in to track usage locally)"}
         </p>
+        {!user && (
+          <Link href="/login" className="btn-primary inline-flex text-sm">
+            Sign in
+          </Link>
+        )}
         <label className="flex items-center justify-between gap-3 text-sm">
           <span>Link Roblox account (required for Studio plugin)</span>
           <input
@@ -138,23 +143,16 @@ export default function SettingsPage() {
           {new Date(periodResetAt).toLocaleDateString()}
         </p>
         <p className="text-xs text-muted">
-          Free includes {FREE_MONTHLY_USAGE}/mo · Pro includes {PRO_MONTHLY_USAGE}/mo · $15.99/mo or $179.99/yr
+          Free includes {FREE_MONTHLY_USAGE}/mo · Pro includes {PRO_MONTHLY_USAGE}/mo · $15.99/mo or $179.99/yr.
+          On GitHub Pages, upgrades are demo-only (local). Real Stripe needs a server later.
         </p>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-primary text-sm" onClick={() => setBuyOpen(true)}>
+          <button className="btn-primary text-sm" type="button" onClick={() => setBuyOpen(true)}>
             Buy more usage
           </button>
-          <a className="btn-ghost text-sm" href="/pricing">
+          <Link className="btn-ghost text-sm" href="/pricing">
             Manage plan
-          </a>
-          <button
-            className="btn-ghost text-sm"
-            onClick={() => {
-              window.open("/api/billing/portal", "_blank");
-            }}
-          >
-            Stripe portal
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -167,6 +165,7 @@ export default function SettingsPage() {
         />
         <button
           className="btn-ghost text-sm"
+          type="button"
           onClick={() => {
             if (confirm("Clear local library and reset usage demo data?")) {
               localStorage.removeItem("rbxlanimate-store-v1");
@@ -174,7 +173,7 @@ export default function SettingsPage() {
             }
           }}
         >
-          Export / wipe local data
+          Wipe local data
         </button>
       </section>
 
@@ -199,12 +198,7 @@ export default function SettingsPage() {
         <input className="input" disabled placeholder="Webhook URL — coming soon" />
       </section>
 
-      <button
-        className="btn-primary"
-        onClick={() => {
-          save();
-        }}
-      >
+      <button className="btn-primary" type="button" onClick={save}>
         {saved ? "Saved" : "Save settings"}
       </button>
 

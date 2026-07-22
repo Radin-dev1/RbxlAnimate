@@ -10,26 +10,18 @@ export default function PricingPage() {
   const upgradeToPro = useAppStore((s) => s.upgradeToPro);
   const [buyOpen, setBuyOpen] = useState(false);
 
-  async function checkout(interval: "month" | "year") {
-    const res = await fetch("/api/billing/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ interval }),
-    });
-    const data = await res.json();
-    if (data.checkoutUrl) window.location.href = data.checkoutUrl;
-    else upgradeToPro();
-  }
-
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <div className="text-center">
-        <p className="text-xs uppercase tracking-[0.3em] text-brand">Pro</p>
+        <p className="font-[family-name:var(--font-display)] text-xs font-semibold tracking-[0.3em] text-brand">
+          Pro
+        </p>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-4xl font-bold md:text-5xl">
           Better animations. More usage.
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-muted">
           Every export is watermark-free. Pro unlocks video→animation, high quality, and a bigger monthly pool.
+          Billing on GitHub Pages is demo-only until a Stripe backend is added.
         </p>
       </div>
 
@@ -52,7 +44,7 @@ export default function PricingPage() {
         </div>
 
         <div className="panel relative overflow-hidden p-6 shadow-[0_0_40px_rgba(225,6,0,0.2)]">
-          <div className="absolute right-4 top-4 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+          <div className="absolute right-4 top-4 rounded-md bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
             Recommended
           </div>
           <h2 className="font-[family-name:var(--font-display)] text-xl text-brand">Pro</h2>
@@ -74,15 +66,15 @@ export default function PricingPage() {
               <p className="text-sm text-brand">You&apos;re on Pro</p>
             ) : (
               <>
-                <button className="btn-primary" onClick={() => checkout("month")}>
-                  Go Pro monthly
+                <button className="btn-primary" type="button" onClick={() => upgradeToPro()}>
+                  Go Pro monthly (demo)
                 </button>
-                <button className="btn-ghost" onClick={() => checkout("year")}>
-                  Go Pro yearly
+                <button className="btn-ghost" type="button" onClick={() => upgradeToPro()}>
+                  Go Pro yearly (demo)
                 </button>
               </>
             )}
-            <button className="btn-ghost" onClick={() => setBuyOpen(true)}>
+            <button className="btn-ghost" type="button" onClick={() => setBuyOpen(true)}>
               Buy more usage
             </button>
           </div>

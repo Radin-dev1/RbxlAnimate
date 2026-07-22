@@ -13,17 +13,17 @@ export default function LibraryPage() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-brand">Library</p>
+          <p className="text-[11px] uppercase tracking-[0.25em] text-brand">Library</p>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">Your animations</h1>
         </div>
-        <Link href="/studio" className="btn-primary text-sm">
+        <Link href="/" className="btn-primary text-sm">
           New animation
         </Link>
       </div>
 
       {library.length === 0 ? (
         <div className="panel p-8 text-center text-muted">
-          Nothing saved yet. Generate your first clip in Studio.
+          Nothing saved yet. Generate your first clip in the maker.
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
@@ -37,13 +37,13 @@ export default function LibraryPage() {
                   </p>
                   <p className="mt-2 line-clamp-2 text-sm text-muted">{clip.prompt}</p>
                 </div>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted">
+                <span className="rounded-md border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted">
                   no watermark
                 </span>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
-                  href="/studio"
+                  href="/"
                   className="btn-ghost text-xs"
                   onClick={() => setActiveClip(clip.id)}
                 >
@@ -51,6 +51,7 @@ export default function LibraryPage() {
                 </Link>
                 <button
                   className="btn-ghost text-xs"
+                  type="button"
                   onClick={() => {
                     const payload = clipToRobloxExport(clip);
                     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -66,7 +67,7 @@ export default function LibraryPage() {
                 >
                   Export
                 </button>
-                <button className="btn-ghost text-xs" onClick={() => removeClip(clip.id)}>
+                <button className="btn-ghost text-xs" type="button" onClick={() => removeClip(clip.id)}>
                   Delete
                 </button>
               </div>

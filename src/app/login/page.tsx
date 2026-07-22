@@ -1,39 +1,51 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { signIn, getProviders } from "next-auth/react";
-import { useEffect } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAppStore } from "@/lib/store";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [providers, setProviders] = useState<Record<string, { id: string; name: string }> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signIn = useAppStore((s) => s.signIn);
+  const user = useAppStore((s) => s.user);
+  const router = useRouter();
 
   useEffect(() => {
-    getProviders().then((p) => setProviders(p));
-  }, []);
+    if (user) router.replace("/");
+  }, [user, router]);
 
-  async function onEmail(e: FormEvent) {
+  function onEmail(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await signIn("email-demo", { email, callbackUrl: "/studio", redirect: false });
+    const cleaned = email.trim().toLowerCase();
+    if (!cleaned.includes("@")) {
+      setError("Enter a valid email.");
+      setBusy(false);
+      return;
+    }
+    signIn(cleaned);
     setBusy(false);
-    if (res?.error) setError("Could not sign in with that email.");
-    else if (res?.url) window.location.href = res.url;
+    router.push("/");
   }
 
-  const oauth = ["github", "google", "roblox"].filter((id) => providers?.[id]);
-
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-64px)] max-w-md flex-col justify-center px-4 py-12">
-      <div className="panel p-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-brand">Account</p>
-        <h1 className="mt-1 font-[family-name:var(--font-display)] text-3xl font-bold">Sign in</h1>
+    <div className="relative mx-auto flex min-h-[calc(100vh-64px)] max-w-md flex-col justify-center px-4 py-12">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="animate-pulse-red absolute left-1/2 top-24 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
+      </div>
+
+      <div className="panel p-6 md:p-7">
+        <p className="font-[family-name:var(--font-display)] text-xs font-semibold tracking-[0.28em] text-brand">
+          rbxlAnimate
+        </p>
+        <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold">Sign in</h1>
         <p className="mt-2 text-sm text-muted">
-          Website: Email, GitHub, Google, or Roblox. Studio plugin will require Roblox.
+          Demo email sign-in (saved in this browser). OAuth (GitHub / Google / Roblox) needs a backend —
+          coming when you leave static Pages.
         </p>
 
         <form onSubmit={onEmail} className="mt-6 space-y-3">
@@ -52,23 +64,14 @@ export default function LoginPage() {
 
         <div className="my-5 flex items-center gap-3 text-xs text-muted">
           <div className="h-px flex-1 bg-border" />
-          or
+          later
           <div className="h-px flex-1 bg-border" />
         </div>
 
         <div className="space-y-2">
-          {oauth.length === 0 && (
-            <p className="rounded-lg border border-border bg-black/30 p-3 text-sm text-muted">
-              GitHub / Google / Roblox appear here when OAuth env keys are set. Email sign-in works now for local use.
-            </p>
-          )}
-          {oauth.map((id) => (
-            <button
-              key={id}
-              className="btn-ghost w-full capitalize"
-              onClick={() => signIn(id, { callbackUrl: "/studio" })}
-            >
-              Continue with {providers?.[id]?.name || id}
+          {["GitHub", "Google", "Roblox"].map((name) => (
+            <button key={name} className="btn-ghost w-full opacity-50" disabled type="button">
+              Continue with {name} — soon
             </button>
           ))}
         </div>
@@ -77,7 +80,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-muted">
           <Link href="/" className="hover:text-white">
-            Back home
+            Back to maker
           </Link>
         </p>
       </div>
