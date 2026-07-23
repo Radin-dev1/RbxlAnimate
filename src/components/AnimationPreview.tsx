@@ -6,7 +6,7 @@ import { OrbitControls, useGLTF } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import type { AnimationClip, JointName, RigType } from "@/lib/types";
+import type { AnimationClip, JointName, PreviewMode, RigType } from "@/lib/types";
 import { R15_BONE_MAP, R6_BONE_MAP, R6_MESH_MAP } from "@/lib/types";
 import { assetPath, r15PosesToR6 } from "@/lib/rigMap";
 
@@ -17,9 +17,16 @@ const R6_URL = `${assetPath("/rigs/r6.glb")}?v=5`;
 const DEFAULT_CAM: [number, number, number] = [2.6, 2.0, 3.4];
 const DEFAULT_TARGET: [number, number, number] = [0, 1.2, 0];
 
-type PoseEulerMap = Map<JointName, THREE.Euler>;
+type PoseSample = {
+  euler: THREE.Euler;
+  px: number;
+  py: number;
+  pz: number;
+};
 
-function samplePoses(clip: AnimationClip, time: number, out: PoseEulerMap): PoseEulerMap | null {
+type PoseMap = Map<JointName, PoseSample>;
+
+function samplePoses(clip: AnimationClip, time: number, out: PoseMap): PoseMap | null {
   const frames = clip.keyframes;
   if (!frames.length) return null;
   const t = ((time % clip.duration) + clip.duration) % clip.duration;
@@ -35,17 +42,20 @@ function samplePoses(clip: AnimationClip, time: number, out: PoseEulerMap): Pose
   for (let j = 0; j < a.poses.length; j++) {
     const pa = a.poses[j];
     const pb = b.poses[j] || pa;
-    let euler = out.get(pa.joint);
-    if (!euler) {
-      euler = new THREE.Euler(0, 0, 0, "XYZ");
+    let sample = out.get(pa.joint);
+    if (!sample) {
+      sample = { euler: new THREE.Euler(0, 0, 0, "XYZ"), px: 0, py: 0, pz: 0 };
     }
-    euler.set(
+    sample.euler.set(
       THREE.MathUtils.degToRad(pa.rx + (pb.rx - pa.rx) * alpha),
       THREE.MathUtils.degToRad(pa.ry + (pb.ry - pa.ry) * alpha),
       THREE.MathUtils.degToRad(pa.rz + (pb.rz - pa.rz) * alpha),
       "XYZ",
     );
-    out.set(pa.joint, euler);
+    sample.px = (pa.px ?? 0) + ((pb.px ?? 0) - (pa.px ?? 0)) * alpha;
+    sample.py = (pa.py ?? 0) + ((pb.py ?? 0) - (pa.py ?? 0)) * alpha;
+    sample.pz = (pa.pz ?? 0) + ((pb.pz ?? 0) - (pa.pz ?? 0)) * alpha;
+    out.set(pa.joint, sample);
   }
   return out;
 }
@@ -53,7 +63,8 @@ function samplePoses(clip: AnimationClip, time: number, out: PoseEulerMap): Pose
 type DriveTarget = {
   joint: string;
   obj: THREE.Object3D;
-  rest: THREE.Euler;
+  restRot: THREE.Euler;
+  restPos: THREE.Vector3;
 };
 
 function collectDriveTargets(
@@ -85,7 +96,12 @@ function collectDriveTargets(
   for (const [joint, boneName] of Object.entries(boneMap)) {
     const obj = resolve(boneName);
     if (obj && !used.has(obj)) {
-      targets.push({ joint, obj, rest: obj.rotation.clone() });
+      targets.push({
+        joint,
+        obj,
+        restRot: obj.rotation.clone(),
+        restPos: obj.position.clone(),
+      });
       used.add(obj);
     }
   }
@@ -95,7 +111,12 @@ function collectDriveTargets(
       if (targets.some((t) => t.joint === joint)) continue;
       const obj = resolve(meshName);
       if (obj && !used.has(obj)) {
-        targets.push({ joint, obj, rest: obj.rotation.clone() });
+        targets.push({
+          joint,
+          obj,
+          restRot: obj.rotation.clone(),
+          restPos: obj.position.clone(),
+        });
         used.add(obj);
       }
     }
@@ -151,7 +172,7 @@ function SkinnedRigPlayer({
     () => collectDriveTargets(root, boneMap, meshMap),
     [root, boneMap, meshMap],
   );
-  const poseScratch = useRef<PoseEulerMap>(new Map());
+  const poseScratch = useRef<PoseMap>(new Map());
   const targetIndex = useMemo(() => {
     const map = new Map<string, DriveTarget>();
     for (const t of targets) map.set(t.joint, t);
@@ -163,7 +184,6 @@ function SkinnedRigPlayer({
       root.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           const mesh = obj as THREE.Mesh;
-          // Only dispose materials we cloned in prepareScene — never shared geometries
           const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
           for (const m of mats) m.dispose();
         }
@@ -175,7 +195,8 @@ function SkinnedRigPlayer({
     const applyRest = () => {
       for (const t of targets) {
         t.obj.rotation.order = "XYZ";
-        t.obj.rotation.copy(t.rest);
+        t.obj.rotation.copy(t.restRot);
+        t.obj.position.copy(t.restPos);
       }
     };
 
@@ -188,19 +209,36 @@ function SkinnedRigPlayer({
     if (!poseMap) return;
 
     for (const t of targets) {
-      const euler = poseMap.get(t.joint as JointName);
+      const sample = poseMap.get(t.joint as JointName);
       t.obj.rotation.order = "XYZ";
-      if (euler) {
-        t.obj.rotation.set(t.rest.x + euler.x, t.rest.y + euler.y, t.rest.z + euler.z);
+      if (sample) {
+        t.obj.rotation.set(
+          t.restRot.x + sample.euler.x,
+          t.restRot.y + sample.euler.y,
+          t.restRot.z + sample.euler.z,
+        );
+        // Root hop / flip arc
+        if (t.joint === "Root") {
+          t.obj.position.set(
+            t.restPos.x + sample.px * 0.55,
+            t.restPos.y + sample.py * 0.55,
+            t.restPos.z + sample.pz * 0.55,
+          );
+        } else {
+          t.obj.position.copy(t.restPos);
+        }
       } else {
-        t.obj.rotation.copy(t.rest);
+        t.obj.rotation.copy(t.restRot);
+        t.obj.position.copy(t.restPos);
       }
     }
 
-    // Ensure unused joints stay at rest if pose set is partial
     if (poseMap.size < targetIndex.size) {
       for (const t of targets) {
-        if (!poseMap.has(t.joint as JointName)) t.obj.rotation.copy(t.rest);
+        if (!poseMap.has(t.joint as JointName)) {
+          t.obj.rotation.copy(t.restRot);
+          t.obj.position.copy(t.restPos);
+        }
       }
     }
   });
@@ -316,6 +354,29 @@ export function AnimationPreview({
   generating = false,
 }: {
   clip: AnimationClip | null;
+  rig?: PreviewMode;
+  autoPlay?: boolean;
+  generating?: boolean;
+}) {
+  if (rig === "dual") {
+    return (
+      <div className="grid gap-3 md:grid-cols-2">
+        <AnimationPreview clip={clip} rig="r15" autoPlay={autoPlay} generating={generating} />
+        <AnimationPreview clip={clip} rig="r6" autoPlay={autoPlay} generating={generating} />
+      </div>
+    );
+  }
+
+  return <AnimationPreviewSingle clip={clip} rig={rig} autoPlay={autoPlay} generating={generating} />;
+}
+
+function AnimationPreviewSingle({
+  clip,
+  rig = "r15",
+  autoPlay = true,
+  generating = false,
+}: {
+  clip: AnimationClip | null;
   rig?: RigType;
   autoPlay?: boolean;
   generating?: boolean;
@@ -325,7 +386,6 @@ export function AnimationPreview({
   const [viewResetToken, setViewResetToken] = useState(0);
   const timeRef = useRef(0);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
-  // Prefer the maker toggle so switching R6/R15 updates the live model immediately
   const activeRig: RigType = rig || clip?.rig || "r15";
   const playClip = useMemo(() => clipForRig(clip, activeRig), [clip, activeRig]);
 

@@ -64,6 +64,49 @@ export default function SettingsPage() {
       </section>
 
       <section className="panel space-y-4 p-5">
+        <h2 className="font-[family-name:var(--font-display)] text-lg">Roblox OAuth</h2>
+        <p className="text-sm text-muted">
+          Paste your OAuth <strong className="text-white">Client ID</strong> and{" "}
+          <strong className="text-white">Client Secret</strong> from the{" "}
+          <a
+            className="text-brand underline"
+            href="https://create.roblox.com/dashboard/credentials"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Creator Dashboard
+          </a>
+          . Saved only in this browser. Set redirect URI to your{" "}
+          <code className="text-white/80">…/login/callback/</code> page.
+        </p>
+        <label className="block space-y-1 text-sm">
+          Client ID
+          <input
+            className="input font-mono text-sm"
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            value={settings.robloxClientId || ""}
+            onChange={(e) => updateSettings({ robloxClientId: e.target.value.trim() })}
+            autoComplete="off"
+          />
+        </label>
+        <label className="block space-y-1 text-sm">
+          Client Secret
+          <input
+            className="input font-mono text-sm"
+            type="password"
+            placeholder="••••••••"
+            value={settings.robloxClientSecret || ""}
+            onChange={(e) => updateSettings({ robloxClientSecret: e.target.value.trim() })}
+            autoComplete="off"
+          />
+        </label>
+        <p className="text-[11px] text-muted">
+          On static GitHub Pages, Roblox may block browser token exchange (CORS). If OAuth
+          can&apos;t finish, you can still link a Roblox username after authorizing.
+        </p>
+      </section>
+
+      <section className="panel space-y-4 p-5">
         <h2 className="font-[family-name:var(--font-display)] text-lg">Look & style</h2>
         <ThemePicker />
       </section>
@@ -84,14 +127,21 @@ export default function SettingsPage() {
           </select>
         </label>
         <label className="block space-y-1 text-sm">
-          Default rig
+          Default rig / preview
           <select
             className="input"
-            value={settings.defaultRig || "r15"}
-            onChange={(e) => updateSettings({ defaultRig: e.target.value as "r15" | "r6" })}
+            value={settings.defaultPreviewMode || settings.defaultRig || "r15"}
+            onChange={(e) => {
+              const v = e.target.value as "r15" | "r6" | "dual";
+              updateSettings({
+                defaultPreviewMode: v,
+                defaultRig: v === "dual" ? "r15" : v,
+              });
+            }}
           >
             <option value="r15">R15</option>
             <option value="r6">R6</option>
+            <option value="dual">Dual (R15 + R6)</option>
           </select>
         </label>
         <Toggle

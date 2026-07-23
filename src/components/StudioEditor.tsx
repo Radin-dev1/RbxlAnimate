@@ -6,13 +6,14 @@ import { AnimationPreview } from "./AnimationPreview";
 import { BuyUsageModal } from "./BuyUsageModal";
 import { generateAnimationFromPrompt, clipToRobloxExport } from "@/lib/generateAnimation";
 import { useAppStore } from "@/lib/store";
-import type { AnimStyle, RigType } from "@/lib/types";
+import type { AnimStyle, PreviewMode, RigType } from "@/lib/types";
 
 const PROMPT_CHIPS = [
+  "backflip",
+  "frontflip then victory",
   "spin then kick then victory",
   "wave both arms then point at camera",
   "combat: punch then dodge then slash",
-  "idle breathe with subtle head look",
   "walk cycle confident stride",
 ];
 
@@ -28,9 +29,11 @@ export function StudioEditor() {
   const setActiveClip = useAppStore((s) => s.setActiveClip);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
-  const [prompt, setPrompt] = useState("cool emote: spin kick then victory pose");
+  const [prompt, setPrompt] = useState("backflip");
   const [style, setStyle] = useState<AnimStyle>(settings.defaultStyle);
-  const [rig, setRig] = useState<RigType>(settings.defaultRig || "r15");
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(
+    (settings.defaultPreviewMode as PreviewMode) || settings.defaultRig || "r15",
+  );
   const [intensity, setIntensity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +44,8 @@ export function StudioEditor() {
     () => library.find((c) => c.id === activeClipId) || library[0] || null,
     [library, activeClipId],
   );
+
+  const generateRig: RigType = previewMode === "r6" ? "r6" : "r15";
 
   async function generate(source: "text" | "video") {
     setError(null);
@@ -81,7 +86,8 @@ export function StudioEditor() {
         style,
         quality,
         source,
-        rig,
+        // Dual stores R15 master; R6 side converts in the preview
+        rig: generateRig,
         intensity,
       });
       addClip(clip);
@@ -130,7 +136,7 @@ export function StudioEditor() {
           <div className="space-y-4">
             <AnimationPreview
               clip={activeClip}
-              rig={rig}
+              rig={previewMode}
               autoPlay={settings.autoPlayPreview}
               generating={busy}
             />
@@ -205,22 +211,25 @@ export function StudioEditor() {
             <div className="space-y-2">
               <span className="text-sm text-muted">Rig</span>
               <div className="rig-toggle" role="group" aria-label="Rig type">
-                {(["r15", "r6"] as RigType[]).map((id) => (
+                {(["r15", "r6", "dual"] as PreviewMode[]).map((id) => (
                   <button
                     key={id}
                     type="button"
-                    className={rig === id ? "is-active" : ""}
+                    className={previewMode === id ? "is-active" : ""}
                     onClick={() => {
-                      setRig(id);
-                      updateSettings({ defaultRig: id });
+                      setPreviewMode(id);
+                      updateSettings({
+                        defaultPreviewMode: id,
+                        defaultRig: id === "dual" ? "r15" : id,
+                      });
                     }}
                   >
-                    {id.toUpperCase()}
+                    {id === "dual" ? "Dual" : id.toUpperCase()}
                   </button>
                 ))}
               </div>
               <p className="text-[11px] text-muted">
-                Switches the live preview model and tags exports for Studio.
+                Dual shows R15 and R6 side by side playing the same animation.
               </p>
             </div>
 

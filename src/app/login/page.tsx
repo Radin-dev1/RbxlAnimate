@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
-import { getOAuthProviders, type OAuthProviderId } from "@/lib/oauthConfig";
+import { getOAuthProviders, buildRobloxAuthorizeUrl, type OAuthProviderId } from "@/lib/oauthConfig";
 
 type Status = "idle" | "busy" | "success" | "error";
 
@@ -37,10 +37,15 @@ export default function LoginPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [oauthNotice, setOauthNotice] = useState<string | null>(null);
+  const [robloxUser, setRobloxUser] = useState("");
   const signIn = useAppStore((s) => s.signIn);
   const user = useAppStore((s) => s.user);
+  const settings = useAppStore((s) => s.settings);
   const router = useRouter();
-  const providers = useMemo(() => getOAuthProviders(), []);
+  const providers = useMemo(
+    () => getOAuthProviders({ robloxClientId: settings.robloxClientId }),
+    [settings.robloxClientId],
+  );
 
   useEffect(() => {
     if (user && status !== "success") router.replace("/");
@@ -71,6 +76,24 @@ export default function LoginPage() {
     if (!provider) return;
     setMessage(null);
     setStatus("idle");
+
+    if (id === "roblox") {
+      const clientId = settings.robloxClientId?.trim();
+      if (!clientId) {
+        setOauthNotice(
+          "Add your Roblox Client ID (and Secret) in Settings → Roblox OAuth, then come back.",
+        );
+        return;
+      }
+      try {
+        sessionStorage.setItem("rbxl_oauth_pending", "1");
+        window.location.href = buildRobloxAuthorizeUrl(clientId);
+      } catch {
+        setOauthNotice("Could not start Roblox OAuth. Check your Client ID in Settings.");
+      }
+      return;
+    }
+
     if (provider.configured) {
       setOauthNotice(
         `${provider.label} keys are set, but OAuth needs a backend — not available on static GitHub Pages yet.`,
@@ -80,6 +103,18 @@ export default function LoginPage() {
         `${provider.label} is coming soon. ${provider.hint}. Email sign-in works now.`,
       );
     }
+  }
+
+  function finishRobloxUsername() {
+    const name = robloxUser.trim().replace(/^@/, "");
+    if (!name) {
+      setOauthNotice("Enter your Roblox username to finish linking.");
+      return;
+    }
+    signIn(`roblox:${name}`, { provider: "roblox", name });
+    setStatus("success");
+    setMessage(`Signed in as ${name} — opening the maker…`);
+    window.setTimeout(() => router.push("/"), 650);
   }
 
   return (
@@ -189,7 +224,13 @@ export default function LoginPage() {
                       Continue with {p.label}
                     </span>
                     <span className="block text-[11px] text-muted group-hover:text-muted">
-                      {p.configured ? "Keys detected · backend required" : "Coming soon · connect keys"}
+                      {p.id === "roblox"
+                        ? p.configured
+                          ? "Uses your Client ID from Settings"
+                          : "Add Client ID in Settings first"
+                        : p.configured
+                          ? "Keys detected · backend required"
+                          : "Coming soon · connect keys"}
                     </span>
                   </span>
                 </span>
@@ -206,6 +247,26 @@ export default function LoginPage() {
             ))}
           </div>
 
+          {settings.robloxClientId ? (
+            <div className="mt-4 space-y-2 rounded-xl border border-border bg-black/30 p-3">
+              <p className="text-xs text-muted">
+                After Roblox redirects back (or if token exchange is blocked), finish with your
+                username:
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  placeholder="Roblox username"
+                  value={robloxUser}
+                  onChange={(e) => setRobloxUser(e.target.value)}
+                />
+                <button type="button" className="btn-primary shrink-0 text-sm" onClick={finishRobloxUsername}>
+                  Link
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {oauthNotice && (
             <p
               role="status"
@@ -219,11 +280,15 @@ export default function LoginPage() {
             <Link href="/" className="inline-flex items-center gap-1.5 transition hover:text-white">
               <span aria-hidden>←</span> Back to maker
             </Link>
+            {" · "}
+            <Link href="/settings" className="hover:text-white">
+              Settings
+            </Link>
           </p>
         </div>
 
         <p className="stagger-2 mt-6 text-center text-[11px] leading-relaxed text-muted/80">
-          Demo auth · localStorage session · no server on GitHub Pages
+          Demo auth · localStorage · Roblox Client ID from Settings
         </p>
       </div>
     </div>

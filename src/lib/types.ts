@@ -4,6 +4,9 @@ export type AnimStyle = "emote" | "combat" | "idle" | "walk";
 
 export type RigType = "r15" | "r6";
 
+/** Preview / maker selection — dual shows both rigs at once */
+export type PreviewMode = RigType | "dual";
+
 /** Canonical joint names used in clips. R15 uses full set; R6 uses a subset. */
 export type JointName =
   | "Root"
@@ -110,6 +113,10 @@ export interface JointPose {
   rx: number;
   ry: number;
   rz: number;
+  /** Optional translation (used for Root hop / flip arc) */
+  px?: number;
+  py?: number;
+  pz?: number;
 }
 
 export interface Keyframe {

@@ -7,6 +7,9 @@ const ALL_JOINTS: JointName[] = R15_JOINTS;
 type MotionVerb =
   | "wave"
   | "spin"
+  | "backflip"
+  | "frontflip"
+  | "cartwheel"
   | "kick"
   | "punch"
   | "jump"
@@ -78,18 +81,23 @@ function seeded(seed: number) {
 }
 
 function restPose(): JointPose[] {
-  return ALL_JOINTS.map((joint) => ({ joint, rx: 0, ry: 0, rz: 0 }));
+  return ALL_JOINTS.map((joint) => ({ joint, rx: 0, ry: 0, rz: 0, px: 0, py: 0, pz: 0 }));
 }
 
 function clonePose(poses: JointPose[]): JointPose[] {
   return poses.map((p) => ({ ...p }));
 }
 
-function setJoint(poses: JointPose[], joint: JointName, rx: number, ry = 0, rz = 0) {
+function setJoint(poses: JointPose[], joint: JointName, rx: number, ry = 0, rz = 0, py = 0) {
   const p = poses.find((x) => x.joint === joint)!;
   p.rx = rx;
   p.ry = ry;
   p.rz = rz;
+  if (joint === "Root") {
+    p.py = py;
+    p.px = p.px ?? 0;
+    p.pz = p.pz ?? 0;
+  }
 }
 
 function addJoint(poses: JointPose[], joint: JointName, rx: number, ry = 0, rz = 0) {
@@ -101,12 +109,18 @@ function addJoint(poses: JointPose[], joint: JointName, rx: number, ry = 0, rz =
 
 function blend(a: JointPose[], b: JointPose[], t: number): JointPose[] {
   const u = clamp01(t);
-  return a.map((pose, i) => ({
-    joint: pose.joint,
-    rx: pose.rx + (b[i].rx - pose.rx) * u,
-    ry: pose.ry + (b[i].ry - pose.ry) * u,
-    rz: pose.rz + (b[i].rz - pose.rz) * u,
-  }));
+  return a.map((pose, i) => {
+    const other = b[i] || pose;
+    return {
+      joint: pose.joint,
+      rx: pose.rx + (other.rx - pose.rx) * u,
+      ry: pose.ry + (other.ry - pose.ry) * u,
+      rz: pose.rz + (other.rz - pose.rz) * u,
+      px: (pose.px ?? 0) + ((other.px ?? 0) - (pose.px ?? 0)) * u,
+      py: (pose.py ?? 0) + ((other.py ?? 0) - (pose.py ?? 0)) * u,
+      pz: (pose.pz ?? 0) + ((other.pz ?? 0) - (pose.pz ?? 0)) * u,
+    };
+  });
 }
 
 function clamp01(t: number) {
@@ -150,13 +164,19 @@ function detectStyle(prompt: string, fallback: AnimStyle): AnimStyle {
   if (/(run|sprint|dash)/.test(p)) return "walk";
   if (/(punch|kick|fight|combat|slash|attack|block|dodge|stomp)/.test(p)) return "combat";
   if (/(idle|stand|breathe|wait|afk)/.test(p)) return "idle";
-  if (/(dance|wave|emote|celebrate|spin|flex|victory|bow|clap|salute|shrug)/.test(p)) return "emote";
+  if (/(dance|wave|emote|celebrate|spin|flex|victory|bow|clap|salute|shrug|flip|backflip|frontflip|cartwheel)/.test(p))
+    return "emote";
   return fallback;
 }
 
 const VERB_PATTERNS: Array<{ verb: MotionVerb; re: RegExp; focus?: BodyFocus }> = [
+  { verb: "backflip", re: /\b(back\s*-?\s*flip|backflip|flip\s+back|backwards?\s+flip)\b/ },
+  { verb: "frontflip", re: /\b(front\s*-?\s*flip|frontflip|flip\s+forward|forward\s+flip)\b/ },
+  { verb: "cartwheel", re: /\b(cart\s*-?\s*wheel|cartwheel|side\s+flip)\b/ },
   { verb: "wave", re: /\b(wave|waving|hello|hi)\b/ },
   { verb: "spin", re: /\b(spin|twirl|whirl|rotate|360)\b/ },
+  // Generic "flip" after specific flips — treat as backflip (most common ask)
+  { verb: "backflip", re: /\b(flip|flipping|flips)\b/ },
   { verb: "kick", re: /\b(kick|kicking|roundhouse)\b/, focus: "rightLeg" },
   { verb: "punch", re: /\b(punch|jab|hook|uppercut)\b/, focus: "rightArm" },
   { verb: "jump", re: /\b(jump|leap|vault)\b/ },
@@ -181,6 +201,9 @@ const VERB_PATTERNS: Array<{ verb: MotionVerb; re: RegExp; focus?: BodyFocus }> 
   { verb: "idle", re: /\b(idle|stand|breathe|wait)\b/ },
 ];
 
+function isFlipVerb(verb: MotionVerb) {
+  return verb === "backflip" || verb === "frontflip" || verb === "cartwheel";
+}
 function detectFocus(segment: string): BodyFocus {
   const s = segment.toLowerCase();
   if (/\b(both arms|arms|hands)\b/.test(s)) return "arms";
@@ -254,6 +277,7 @@ function phaseEaseFor(verb: MotionVerb, kind: PhaseKind): EaseKind {
   if (kind === "follow") return verb === "jump" || verb === "hop" || verb === "kick" ? "bounce" : "smooth";
   if (verb === "punch" || verb === "kick" || verb === "slash" || verb === "stomp") return "snap";
   if (verb === "jump" || verb === "hop" || verb === "celebrate" || verb === "victory") return "overshoot";
+  if (isFlipVerb(verb)) return kind === "action" ? "smooth" : "soft";
   return "smooth";
 }
 
@@ -321,7 +345,15 @@ function applyFocusScale(focus: BodyFocus, joint: JointName): number {
 function scalePose(poses: JointPose[], focus: BodyFocus, amount: number): JointPose[] {
   return poses.map((p) => {
     const s = applyFocusScale(focus, p.joint) * amount;
-    return { joint: p.joint, rx: p.rx * s, ry: p.ry * s, rz: p.rz * s };
+    return {
+      joint: p.joint,
+      rx: p.rx * s,
+      ry: p.ry * s,
+      rz: p.rz * s,
+      px: p.px,
+      py: p.py,
+      pz: p.pz,
+    };
   });
 }
 
@@ -349,6 +381,22 @@ function verbActionPose(verb: MotionVerb, intensity: number, side: number): Join
       setJoint(poses, "LeftUpperLeg", 18 * i);
       setJoint(poses, "RightUpperLeg", -12 * i);
       setJoint(poses, "Head", 0, -20 * i, 0);
+      break;
+    case "backflip":
+    case "frontflip":
+    case "cartwheel":
+      // Peak mid-air tuck — continuous rotation is applied in poseForPhase
+      setJoint(poses, "Root", verb === "frontflip" ? 180 : verb === "cartwheel" ? 0 : -180, verb === "cartwheel" ? 180 : 0, verb === "cartwheel" ? -90 : 0, 1.4 * i);
+      setJoint(poses, "LeftUpperLeg", -120 * i);
+      setJoint(poses, "RightUpperLeg", -120 * i);
+      setJoint(poses, "LeftLowerLeg", 130 * i);
+      setJoint(poses, "RightLowerLeg", 130 * i);
+      setJoint(poses, "LeftUpperArm", -160 * i, 0, 20);
+      setJoint(poses, "RightUpperArm", -160 * i, 0, -20);
+      setJoint(poses, "LeftLowerArm", -40 * i);
+      setJoint(poses, "RightLowerArm", -40 * i);
+      setJoint(poses, "UpperTorso", verb === "frontflip" ? 20 * i : -15 * i);
+      setJoint(poses, "Head", verb === "frontflip" ? 25 * i : -20 * i);
       break;
     case "kick":
       setJoint(poses, "RightUpperLeg", -95 * i, 10, -5);
@@ -584,6 +632,19 @@ function verbAnticipationPose(verb: MotionVerb, intensity: number): JointPose[] 
       setJoint(anti, "RightUpperArm", -40 * intensity, 0, -30);
       setJoint(anti, "UpperTorso", 0, -15 * intensity, 0);
       break;
+    case "backflip":
+    case "frontflip":
+    case "cartwheel":
+      setJoint(anti, "Root", 12 * intensity, 0, 0, 0);
+      setJoint(anti, "LeftUpperLeg", -75 * intensity);
+      setJoint(anti, "RightUpperLeg", -75 * intensity);
+      setJoint(anti, "LeftLowerLeg", 110 * intensity);
+      setJoint(anti, "RightLowerLeg", 110 * intensity);
+      setJoint(anti, "LeftUpperArm", -50 * intensity, 0, 25);
+      setJoint(anti, "RightUpperArm", -50 * intensity, 0, -25);
+      setJoint(anti, "UpperTorso", 18 * intensity);
+      setJoint(anti, "Head", 10 * intensity);
+      break;
     case "stomp":
       setJoint(anti, "RightUpperLeg", -80 * intensity);
       setJoint(anti, "RightLowerLeg", 40 * intensity);
@@ -628,10 +689,95 @@ function verbFollowPose(verb: MotionVerb, intensity: number): JointPose[] {
       addJoint(follow, "Root", 0, 40, 0);
       addJoint(follow, "UpperTorso", 0, 15, 0);
       break;
+    case "backflip":
+    case "frontflip":
+    case "cartwheel":
+      setJoint(follow, "Root", 0, 0, 0, 0);
+      setJoint(follow, "LeftUpperLeg", -20 * intensity);
+      setJoint(follow, "RightUpperLeg", -20 * intensity);
+      setJoint(follow, "LeftLowerLeg", 30 * intensity);
+      setJoint(follow, "RightLowerLeg", 30 * intensity);
+      setJoint(follow, "LeftUpperArm", -40 * intensity, 0, 15);
+      setJoint(follow, "RightUpperArm", -40 * intensity, 0, -15);
+      setJoint(follow, "UpperTorso", 5 * intensity);
+      break;
     default:
       break;
   }
   return follow;
+}
+
+/** Continuous flip: crouch → launch → full rotation in air → land */
+function sampleFlipPose(
+  verb: "backflip" | "frontflip" | "cartwheel",
+  stepLocal: number,
+  intensity: number,
+): JointPose[] {
+  const u = clamp01(stepLocal);
+  const poses = restPose();
+  const i = intensity;
+
+  // 0–0.18 crouch, 0.18–0.82 airborne flip, 0.82–1 land
+  if (u < 0.18) {
+    const c = ease("soft", u / 0.18);
+    setJoint(poses, "Root", 14 * i * c, 0, 0, 0);
+    setJoint(poses, "LeftUpperLeg", -80 * i * c);
+    setJoint(poses, "RightUpperLeg", -80 * i * c);
+    setJoint(poses, "LeftLowerLeg", 115 * i * c);
+    setJoint(poses, "RightLowerLeg", 115 * i * c);
+    setJoint(poses, "LeftUpperArm", -45 * i * c, 0, 20);
+    setJoint(poses, "RightUpperArm", -45 * i * c, 0, -20);
+    setJoint(poses, "UpperTorso", 20 * i * c);
+    setJoint(poses, "Head", 12 * i * c);
+    return poses;
+  }
+
+  if (u > 0.82) {
+    const land = ease("bounce", (u - 0.82) / 0.18);
+    const settle = 1 - land;
+    setJoint(poses, "Root", 8 * i * settle, 0, 0, 0.15 * settle);
+    setJoint(poses, "LeftUpperLeg", -35 * i * settle);
+    setJoint(poses, "RightUpperLeg", -35 * i * settle);
+    setJoint(poses, "LeftLowerLeg", 45 * i * settle);
+    setJoint(poses, "RightLowerLeg", 45 * i * settle);
+    setJoint(poses, "LeftUpperArm", -55 * i * settle, 0, 12);
+    setJoint(poses, "RightUpperArm", -55 * i * settle, 0, -12);
+    setJoint(poses, "UpperTorso", 8 * i * settle);
+    return poses;
+  }
+
+  // Airborne: drive a full 360° on the correct axis
+  const air = (u - 0.18) / 0.64;
+  const spin = ease("smooth", air); // 0→1 through the flip
+  const height = Math.sin(air * Math.PI) * 1.55 * i;
+
+  let rx = 0;
+  let ry = 0;
+  let rz = 0;
+  if (verb === "backflip") {
+    rx = -360 * spin; // pitch backward
+  } else if (verb === "frontflip") {
+    rx = 360 * spin; // pitch forward
+  } else {
+    rz = -360 * spin; // cartwheel roll
+    ry = 15 * Math.sin(air * Math.PI);
+  }
+
+  setJoint(poses, "Root", rx, ry, rz, height);
+  // Tight tuck in the middle of the flip
+  const tuck = Math.sin(air * Math.PI);
+  setJoint(poses, "LeftUpperLeg", -40 * i - 90 * i * tuck);
+  setJoint(poses, "RightUpperLeg", -40 * i - 90 * i * tuck);
+  setJoint(poses, "LeftLowerLeg", 50 * i + 90 * i * tuck);
+  setJoint(poses, "RightLowerLeg", 50 * i + 90 * i * tuck);
+  setJoint(poses, "LeftUpperArm", -100 * i - 60 * i * tuck, 0, 25);
+  setJoint(poses, "RightUpperArm", -100 * i - 60 * i * tuck, 0, -25);
+  setJoint(poses, "LeftLowerArm", -30 * i);
+  setJoint(poses, "RightLowerArm", -30 * i);
+  setJoint(poses, "UpperTorso", verb === "frontflip" ? 12 * i : -10 * i);
+  setJoint(poses, "Head", verb === "frontflip" ? 20 * i : -18 * i);
+  setJoint(poses, "LowerTorso", 0, 0, verb === "cartwheel" ? -20 * i * tuck : 0);
+  return poses;
 }
 
 function loopCyclePose(style: AnimStyle, phase: number, intensity: number, high: boolean): JointPose[] {
@@ -722,8 +868,28 @@ function loopCyclePose(style: AnimStyle, phase: number, intensity: number, high:
 }
 
 function poseForPhase(phase: PhaseSpec, localT: number, globalT: number, high: boolean): JointPose[] {
-  const e = ease(phase.ease, localT);
   const { verb, focus, intensity } = phase.step;
+
+  // Flips need continuous Root rotation across the whole step (not pose blending)
+  if (isFlipVerb(verb)) {
+    // Map phase-local time back to full step progress using phase window weights
+    // anticipation 0–0.18, action 0.18–0.55, follow 0.55–0.82, settle 0.82–1 of step
+    let stepLocal = localT;
+    if (phase.kind === "anticipation") stepLocal = lerp(0, 0.18, localT);
+    else if (phase.kind === "action") stepLocal = lerp(0.18, 0.55, localT);
+    else if (phase.kind === "follow") stepLocal = lerp(0.55, 0.82, localT);
+    else stepLocal = lerp(0.82, 1, localT);
+
+    let poses = sampleFlipPose(verb, stepLocal, intensity);
+    poses = scalePose(poses, focus, 1);
+    if (high) {
+      const micro = Math.sin(globalT * Math.PI * 4) * 2;
+      addJoint(poses, "Head", micro * 0.2, micro * 0.3, 0);
+    }
+    return poses;
+  }
+
+  const e = ease(phase.ease, localT);
   const side = 1;
 
   let target: JointPose[];
@@ -751,7 +917,6 @@ function poseForPhase(phase: PhaseSpec, localT: number, globalT: number, high: b
   const poses = blend(scalePose(from, focus, 1), target, e);
 
   if (high) {
-    // Smooth secondary motion (not random per-frame jitter)
     const micro = Math.sin(globalT * Math.PI * 4) * 2.8;
     const micro2 = Math.cos(globalT * Math.PI * 3.2) * 2.2;
     addJoint(poses, "Head", micro * 0.35, micro2 * 0.55, micro * 0.15);
@@ -809,8 +974,9 @@ export function inferDurationSeconds(opts: {
   }
 
   // Emote / combat: ~0.85–1.15s per verb step (Roblox emotes are short; combos stack)
-  const perStep = opts.style === "combat" ? 0.95 : 1.05;
-  const base = Math.max(1.2, opts.stepCount * perStep);
+  const flipHeavy = /\b(back\s*-?\s*flip|backflip|front\s*-?\s*flip|frontflip|cart\s*-?\s*wheel|cartwheel|\bflip\b)/.test(p);
+  const perStep = flipHeavy ? 1.85 : opts.style === "combat" ? 0.95 : 1.05;
+  const base = Math.max(flipHeavy ? 2.2 : 1.2, opts.stepCount * perStep);
   const slow = /\b(slow|gentle|soft|dramatic|long)\b/.test(p) ? 1.35 : 1;
   const fast = /\b(fast|quick|snap|rapid)\b/.test(p) ? 0.75 : 1;
   return clampDuration((base * slow * fast) / Math.max(0.75, Math.min(1.35, intensity)));
@@ -830,19 +996,21 @@ export function generateAnimationFromPrompt(opts: {
   rig?: RigType;
   intensity?: number;
 }): AnimationClip {
-  const rig: RigType = opts.rig || "r15";
+  const rig: RigType = opts.rig === "r6" ? "r6" : "r15";
   const style = detectStyle(opts.prompt, opts.style);
-  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v3`);
+  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v4-flip`);
   const rand = seeded(seed);
   const high = opts.quality === "high";
   const intensityBoost = (opts.intensity ?? 1) * (high ? 1.12 : 0.95);
-  const frames = high ? 64 : 28;
   const loopable = style === "walk" || style === "idle";
 
   const steps = parseMotionGrammar(opts.prompt, style, rand).map((s) => ({
     ...s,
     intensity: s.intensity * intensityBoost,
   }));
+  const hasFlip = steps.some((s) => isFlipVerb(s.verb));
+  // Flips need denser keys so the 360° reads smoothly
+  const frames = hasFlip ? (high ? 96 : 64) : high ? 64 : 28;
   const phases = buildPhases(steps, loopable);
 
   const inferred = inferDurationSeconds({

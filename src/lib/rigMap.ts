@@ -30,7 +30,15 @@ export function r15PosesToR6(poses: JointPose[]): JointPose[] {
   const rll = getPose(poses, "RightLowerLeg");
 
   return [
-    { joint: "Root", rx: root.rx, ry: root.ry, rz: root.rz },
+    {
+      joint: "Root",
+      rx: root.rx,
+      ry: root.ry,
+      rz: root.rz,
+      px: root.px,
+      py: root.py,
+      pz: root.pz,
+    },
     mix(lower, upper, 0.55, "Torso"),
     { joint: "Head", rx: head.rx, ry: head.ry, rz: head.rz },
     mix(lua, lla, 0.35, "LeftArm"),

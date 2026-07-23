@@ -15,6 +15,7 @@ export interface DemoUser {
 interface UserSettings {
   defaultStyle: AnimStyle;
   defaultRig: "r15" | "r6";
+  defaultPreviewMode: "r15" | "r6" | "dual";
   themeId: ThemeId;
   autoPlayPreview: boolean;
   exportFormat: "json" | "plugin";
@@ -26,6 +27,13 @@ interface UserSettings {
   lowUsageWarning: boolean;
   robloxLinked: boolean;
   robloxUsername: string;
+  /** Roblox OAuth app Client ID (safe to keep locally) */
+  robloxClientId: string;
+  /**
+   * Client Secret — stored only in your browser localStorage for experiments.
+   * Never commit this. Full OAuth token exchange on static Pages is limited by CORS.
+   */
+  robloxClientSecret: string;
 }
 
 interface AppState {
@@ -36,7 +44,7 @@ interface AppState {
   library: AnimationClip[];
   activeClipId: string | null;
   settings: UserSettings;
-  signIn: (email: string) => void;
+  signIn: (email: string, meta?: { provider?: string; name?: string }) => void;
   signOut: () => void;
   setPlan: (plan: Plan) => void;
   setUsage: (n: number) => void;
@@ -53,6 +61,7 @@ interface AppState {
 const defaultSettings: UserSettings = {
   defaultStyle: "emote",
   defaultRig: "r15",
+  defaultPreviewMode: "r15",
   themeId: DEFAULT_THEME_ID,
   autoPlayPreview: true,
   exportFormat: "json",
@@ -64,6 +73,8 @@ const defaultSettings: UserSettings = {
   lowUsageWarning: true,
   robloxLinked: false,
   robloxUsername: "",
+  robloxClientId: "",
+  robloxClientSecret: "",
 };
 
 function nextPeriodReset() {
@@ -82,13 +93,24 @@ export const useAppStore = create<AppState>()(
       library: [],
       activeClipId: null,
       settings: defaultSettings,
-      signIn: (email) => {
+      signIn: (email, meta) => {
         const cleaned = email.trim().toLowerCase();
-        if (!cleaned.includes("@")) return;
+        const isRoblox = meta?.provider === "roblox" || cleaned.startsWith("roblox:");
+        if (!isRoblox && !cleaned.includes("@")) return;
+        const name =
+          meta?.name ||
+          (isRoblox
+            ? cleaned.replace(/^roblox:/, "") || "RobloxUser"
+            : cleaned.split("@")[0] || "maker");
         set({
           user: {
-            email: cleaned,
-            name: cleaned.split("@")[0] || "maker",
+            email: isRoblox ? `roblox:${name}@rbxlAnimate.local` : cleaned,
+            name,
+          },
+          settings: {
+            ...get().settings,
+            robloxLinked: isRoblox || get().settings.robloxLinked,
+            robloxUsername: isRoblox ? name : get().settings.robloxUsername,
           },
         });
       },
