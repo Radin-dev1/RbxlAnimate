@@ -2,17 +2,20 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { AnimationClip, JointName, RigType } from "@/lib/types";
 import { R15_BONE_MAP, R6_BONE_MAP, R6_MESH_MAP } from "@/lib/types";
-import { assetPath } from "@/lib/rigMap";
+import { assetPath, r15PosesToR6 } from "@/lib/rigMap";
 
 // Cache-bust so Pages clients pick up re-exported meshes
-const R15_URL = `${assetPath("/rigs/r15.glb")}?v=3`;
-const R6_URL = `${assetPath("/rigs/r6.glb")}?v=3`;
+const R15_URL = `${assetPath("/rigs/r15.glb")}?v=4`;
+const R6_URL = `${assetPath("/rigs/r6.glb")}?v=4`;
 
-function samplePoses(clip: AnimationClip, time: number) {
+type PoseEulerMap = Map<JointName, THREE.Euler>;
+
+function samplePoses(clip: AnimationClip, time: number, out: PoseEulerMap): PoseEulerMap | null {
   const frames = clip.keyframes;
   if (!frames.length) return null;
   const t = ((time % clip.duration) + clip.duration) % clip.duration;
@@ -23,56 +26,91 @@ function samplePoses(clip: AnimationClip, time: number) {
   const span = Math.max(b.time - a.time, 0.0001);
   const raw = THREE.MathUtils.clamp((t - a.time) / span, 0, 1);
   const alpha = raw * raw * (3 - 2 * raw);
-  const map = new Map<JointName, THREE.Euler>();
+
+  out.clear();
   for (let j = 0; j < a.poses.length; j++) {
     const pa = a.poses[j];
     const pb = b.poses[j] || pa;
-    map.set(
-      pa.joint,
-      new THREE.Euler(
-        THREE.MathUtils.degToRad(pa.rx + (pb.rx - pa.rx) * alpha),
-        THREE.MathUtils.degToRad(pa.ry + (pb.ry - pa.ry) * alpha),
-        THREE.MathUtils.degToRad(pa.rz + (pb.rz - pa.rz) * alpha),
-        "XYZ",
-      ),
+    let euler = out.get(pa.joint);
+    if (!euler) {
+      euler = new THREE.Euler(0, 0, 0, "XYZ");
+    }
+    euler.set(
+      THREE.MathUtils.degToRad(pa.rx + (pb.rx - pa.rx) * alpha),
+      THREE.MathUtils.degToRad(pa.ry + (pb.ry - pa.ry) * alpha),
+      THREE.MathUtils.degToRad(pa.rz + (pb.rz - pa.rz) * alpha),
+      "XYZ",
     );
+    out.set(pa.joint, euler);
   }
-  return map;
+  return out;
 }
 
-function collectBones(root: THREE.Object3D) {
-  const map = new Map<string, THREE.Bone>();
+type DriveTarget = {
+  joint: string;
+  obj: THREE.Object3D;
+  rest: THREE.Euler;
+};
+
+function collectDriveTargets(
+  root: THREE.Object3D,
+  boneMap: Record<string, string>,
+  meshMap?: Record<string, string>,
+): DriveTarget[] {
+  const byName = new Map<string, THREE.Object3D>();
   root.traverse((obj) => {
-    if ((obj as THREE.Bone).isBone) {
-      map.set(obj.name, obj as THREE.Bone);
+    if (!obj.name) return;
+    // Prefer bones when duplicate mesh/bone names exist (R15 hierarchy)
+    const prev = byName.get(obj.name);
+    if (!prev || (obj as THREE.Bone).isBone) {
+      byName.set(obj.name, obj);
     }
   });
-  return map;
-}
 
-function collectNamedObjects(root: THREE.Object3D) {
-  const map = new Map<string, THREE.Object3D>();
-  root.traverse((obj) => {
-    if (obj.name) map.set(obj.name, obj);
-  });
-  return map;
+  const targets: DriveTarget[] = [];
+  const used = new Set<THREE.Object3D>();
+
+  for (const [joint, boneName] of Object.entries(boneMap)) {
+    const obj = byName.get(boneName);
+    if (obj && !used.has(obj)) {
+      targets.push({ joint, obj, rest: obj.rotation.clone() });
+      used.add(obj);
+    }
+  }
+
+  if (meshMap) {
+    for (const [joint, meshName] of Object.entries(meshMap)) {
+      if (targets.some((t) => t.joint === joint)) continue;
+      const obj = byName.get(meshName);
+      if (obj && !used.has(obj)) {
+        targets.push({ joint, obj, rest: obj.rotation.clone() });
+        used.add(obj);
+      }
+    }
+  }
+
+  return targets;
 }
 
 function prepareScene(scene: THREE.Object3D) {
-  const root = scene.clone(true);
+  // SkeletonUtils keeps bone↔mesh links intact (plain clone breaks skins)
+  const root = cloneSkeleton(scene);
   root.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
       const mesh = obj as THREE.Mesh;
       mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      if (mesh.material) {
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const m of mats) {
-          const std = m as THREE.MeshStandardMaterial;
-          if (std.color) std.metalness = 0.12;
-          if ("roughness" in std) std.roughness = 0.55;
-        }
-      }
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = true;
+      const src = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      const cloned = src.map((m) => {
+        const c = m.clone();
+        const std = c as THREE.MeshStandardMaterial;
+        if ("metalness" in std) std.metalness = 0.1;
+        if ("roughness" in std) std.roughness = 0.6;
+        if ("envMapIntensity" in std) std.envMapIntensity = 0;
+        return c;
+      });
+      mesh.material = cloned.length === 1 ? cloned[0] : cloned;
     }
   });
   return root;
@@ -86,7 +124,6 @@ function SkinnedRigPlayer({
   boneMap,
   meshMap,
   scale,
-  position,
 }: {
   url: string;
   clip: AnimationClip | null;
@@ -95,38 +132,38 @@ function SkinnedRigPlayer({
   boneMap: Record<string, string>;
   meshMap?: Record<string, string>;
   scale: number;
-  position: [number, number, number];
 }) {
   const { scene } = useGLTF(url);
   const root = useMemo(() => prepareScene(scene), [scene]);
-  const bones = useMemo(() => collectBones(root), [root]);
-  const named = useMemo(() => collectNamedObjects(root), [root]);
-  const restRot = useMemo(() => {
-    const map = new Map<string, THREE.Euler>();
-    for (const [name, bone] of bones) {
-      map.set(`bone:${name}`, bone.rotation.clone());
-    }
-    if (meshMap) {
-      for (const meshName of Object.values(meshMap)) {
-        const obj = named.get(meshName);
-        if (obj) map.set(`mesh:${meshName}`, obj.rotation.clone());
-      }
-    }
+  const targets = useMemo(
+    () => collectDriveTargets(root, boneMap, meshMap),
+    [root, boneMap, meshMap],
+  );
+  const poseScratch = useRef<PoseEulerMap>(new Map());
+  const targetIndex = useMemo(() => {
+    const map = new Map<string, DriveTarget>();
+    for (const t of targets) map.set(t.joint, t);
     return map;
-  }, [bones, named, meshMap]);
+  }, [targets]);
+
+  useEffect(() => {
+    return () => {
+      root.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          // Only dispose materials we cloned in prepareScene — never shared geometries
+          const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+          for (const m of mats) m.dispose();
+        }
+      });
+    };
+  }, [root]);
 
   useFrame((_, delta) => {
     const applyRest = () => {
-      for (const [name, bone] of bones) {
-        const rest = restRot.get(`bone:${name}`);
-        if (rest) bone.rotation.copy(rest);
-      }
-      if (meshMap) {
-        for (const meshName of Object.values(meshMap)) {
-          const obj = named.get(meshName);
-          const rest = restRot.get(`mesh:${meshName}`);
-          if (obj && rest) obj.rotation.copy(rest);
-        }
+      for (const t of targets) {
+        t.obj.rotation.order = "XYZ";
+        t.obj.rotation.copy(t.rest);
       }
     };
 
@@ -135,33 +172,28 @@ function SkinnedRigPlayer({
       return;
     }
     if (playing) timeRef.current += delta;
-    const poseMap = samplePoses(clip, timeRef.current);
+    const poseMap = samplePoses(clip, timeRef.current, poseScratch.current);
     if (!poseMap) return;
 
-    for (const [joint, euler] of poseMap) {
-      const boneName = boneMap[joint];
-      const bone = boneName ? bones.get(boneName) : undefined;
-      if (bone) {
-        const rest = restRot.get(`bone:${boneName}`);
-        if (rest) {
-          bone.rotation.order = "XYZ";
-          bone.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
-        }
-        continue;
+    for (const t of targets) {
+      const euler = poseMap.get(t.joint as JointName);
+      t.obj.rotation.order = "XYZ";
+      if (euler) {
+        t.obj.rotation.set(t.rest.x + euler.x, t.rest.y + euler.y, t.rest.z + euler.z);
+      } else {
+        t.obj.rotation.copy(t.rest);
       }
-      const meshName = meshMap?.[joint];
-      const meshObj = meshName ? named.get(meshName) : undefined;
-      if (meshObj) {
-        const rest = restRot.get(`mesh:${meshName}`);
-        if (rest) {
-          meshObj.rotation.order = "XYZ";
-          meshObj.rotation.set(rest.x + euler.x, rest.y + euler.y, rest.z + euler.z);
-        }
+    }
+
+    // Ensure unused joints stay at rest if pose set is partial
+    if (poseMap.size < targetIndex.size) {
+      for (const t of targets) {
+        if (!poseMap.has(t.joint as JointName)) t.obj.rotation.copy(t.rest);
       }
     }
   });
 
-  return <primitive object={root} scale={scale} position={position} />;
+  return <primitive object={root} scale={scale} position={[0, 0, 0]} />;
 }
 
 function RigCanvas({
@@ -178,9 +210,7 @@ function RigCanvas({
   const url = rig === "r6" ? R6_URL : R15_URL;
   const boneMap = rig === "r6" ? R6_BONE_MAP : R15_BONE_MAP;
   const meshMap = rig === "r6" ? R6_MESH_MAP : undefined;
-  // Fit classic Roblox character scale into the preview frame
   const scale = rig === "r6" ? 0.38 : 0.4;
-  const position: [number, number, number] = [0, 0, 0];
 
   return (
     <SkinnedRigPlayer
@@ -191,7 +221,6 @@ function RigCanvas({
       boneMap={boneMap}
       meshMap={meshMap}
       scale={scale}
-      position={position}
     />
   );
 }
@@ -223,6 +252,24 @@ function PreviewError({ rig, message }: { rig: RigType; message: string }) {
   );
 }
 
+/** Adapt clip poses to the currently displayed rig (toggle can differ from clip.rig). */
+function clipForRig(clip: AnimationClip | null, rig: RigType): AnimationClip | null {
+  if (!clip) return null;
+  if (clip.rig === rig) return clip;
+  if (rig === "r6" && clip.rig === "r15") {
+    return {
+      ...clip,
+      rig: "r6",
+      keyframes: clip.keyframes.map((kf) => ({
+        time: kf.time,
+        poses: r15PosesToR6(kf.poses),
+      })),
+    };
+  }
+  // R6 → R15: keep as-is (subset joints still drive matching body parts via maps)
+  return { ...clip, rig };
+}
+
 export function AnimationPreview({
   clip,
   rig = "r15",
@@ -237,7 +284,9 @@ export function AnimationPreview({
   const [playing, setPlaying] = useState(autoPlay);
   const [loadError, setLoadError] = useState<string | null>(null);
   const timeRef = useRef(0);
-  const activeRig: RigType = clip?.rig || rig;
+  // Prefer the maker toggle so switching R6/R15 updates the live model immediately
+  const activeRig: RigType = rig || clip?.rig || "r15";
+  const playClip = useMemo(() => clipForRig(clip, activeRig), [clip, activeRig]);
 
   useEffect(() => {
     setPlaying(autoPlay);
@@ -289,28 +338,35 @@ export function AnimationPreview({
               key={activeRig}
               camera={{ position: [2.6, 2.0, 3.4], fov: 40 }}
               shadows
-              onCreated={() => setLoadError(null)}
+              dpr={[1, 1.5]}
+              gl={{ antialias: true, powerPreference: "high-performance" }}
+              onCreated={({ gl }) => {
+                setLoadError(null);
+                gl.shadowMap.type = THREE.BasicShadowMap;
+              }}
             >
               <color attach="background" args={["#070707"]} />
-              <ambientLight intensity={0.6} />
+              <ambientLight intensity={0.7} />
               <directionalLight
                 castShadow
                 position={[4, 7, 3]}
-                intensity={1.5}
+                intensity={1.35}
                 color="#ffffff"
-                shadow-mapSize-width={1024}
-                shadow-mapSize-height={1024}
+                shadow-mapSize-width={512}
+                shadow-mapSize-height={512}
+                shadow-camera-far={16}
+                shadow-camera-left={-4}
+                shadow-camera-right={4}
+                shadow-camera-top={4}
+                shadow-camera-bottom={-4}
               />
-              <spotLight position={[-3, 5, -2]} intensity={0.7} color="#ffffff" />
-              <pointLight position={[0, 2.4, 1.6]} intensity={0.4} color="#ffffff" />
               <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-                <circleGeometry args={[3.2, 64]} />
-                <meshStandardMaterial color="#121212" metalness={0.45} roughness={0.75} />
+                <circleGeometry args={[3.2, 32]} />
+                <meshStandardMaterial color="#121212" metalness={0.35} roughness={0.8} />
               </mesh>
               <RigLoadGuard rig={activeRig} onError={setLoadError}>
-                <RigCanvas clip={clip} playing={playing} timeRef={timeRef} rig={activeRig} />
+                <RigCanvas clip={playClip} playing={playing} timeRef={timeRef} rig={activeRig} />
               </RigLoadGuard>
-              <ContactShadows opacity={0.55} scale={8} blur={2.6} far={4} color="#000000" />
               <OrbitControls enablePan={false} minDistance={2} maxDistance={8} target={[0, 1.2, 0]} />
             </Canvas>
           </Suspense>
