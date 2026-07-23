@@ -38,7 +38,7 @@ export function getOAuthProviders(): OAuthProvider[] {
     {
       id: "roblox",
       label: "Roblox",
-      hint: "Needed for Studio plugin — connect ROBLOX_OAUTH keys later",
+      hint: "Add ROBLOX_CLIENT_ID + ROBLOX_CLIENT_SECRET to .env.local (see .env.example)",
       envKey: "NEXT_PUBLIC_ROBLOX_OAUTH",
       configured: flag("NEXT_PUBLIC_ROBLOX_OAUTH"),
     },

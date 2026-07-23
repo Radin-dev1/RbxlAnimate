@@ -43,6 +43,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) — you land in the maker. Sign in with any email to generate.
 
+## Roblox OAuth (Client ID / Secret)
+
+On **GitHub Pages** the site is static, so secrets cannot run in the browser. Email demo login works without keys.
+
+When you add a backend (or run Next.js as a server), put credentials in **`.env.local`** (never commit this file):
+
+```bash
+ROBLOX_CLIENT_ID=your_client_id
+ROBLOX_CLIENT_SECRET=your_client_secret
+```
+
+Create the OAuth app at [Roblox Creator Dashboard → Credentials](https://create.roblox.com/dashboard/credentials), set the redirect to `/api/auth/callback/roblox`, and see [`.env.example`](.env.example) for the full list.
+
+Optional UI-only flag (marks Roblox as “Ready” on `/login` — does not enable real OAuth on Pages):
+
+```bash
+NEXT_PUBLIC_ROBLOX_OAUTH=true
+```
+
 ## Scripts
 
 | Command | Description |

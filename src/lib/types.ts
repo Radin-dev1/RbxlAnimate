@@ -77,25 +77,28 @@ export const R15_BONE_MAP: Record<string, string> = {
   RightFoot: "RightFoot",
 };
 
-/** Matches InternalArmature bone names from Blender R6.blend */
+/**
+ * Matches R6 bones after GLTFLoader sanitizes spaces → underscores
+ * (Blender "Left Arm" becomes Three.js "Left_Arm").
+ */
 export const R6_BONE_MAP: Record<string, string> = {
   Root: "HumanoidRootPart",
   Torso: "Torso",
   Head: "Head",
-  LeftArm: "Left Arm",
-  RightArm: "Right Arm",
-  LeftLeg: "Left Leg",
-  RightLeg: "Right Leg",
+  LeftArm: "Left_Arm",
+  RightArm: "Right_Arm",
+  LeftLeg: "Left_Leg",
+  RightLeg: "Right_Leg",
 };
 
-/** Fallback: drive mesh Object3Ds by name when skins are missing */
+/** Fallback: drive mesh Object3Ds by sanitized glTF names */
 export const R6_MESH_MAP: Record<string, string> = {
   Head: "Head_MBlocky",
   Torso: "Torso_MBlocky",
-  LeftArm: "Left Arm_MBlocky",
-  RightArm: "Right Arm_MBlocky",
-  LeftLeg: "Left Leg_MBlocky",
-  RightLeg: "Right Leg_MBlocky",
+  LeftArm: "Left_Arm_MBlocky",
+  RightArm: "Right_Arm_MBlocky",
+  LeftLeg: "Left_Leg_MBlocky",
+  RightLeg: "Right_Leg_MBlocky",
 };
 
 /** Hard cap for any generated / imported clip length (7 minutes). */

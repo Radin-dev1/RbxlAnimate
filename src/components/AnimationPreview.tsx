@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { AnimationClip, JointName, RigType } from "@/lib/types";
@@ -10,8 +11,11 @@ import { R15_BONE_MAP, R6_BONE_MAP, R6_MESH_MAP } from "@/lib/types";
 import { assetPath, r15PosesToR6 } from "@/lib/rigMap";
 
 // Cache-bust so Pages clients pick up re-exported meshes
-const R15_URL = `${assetPath("/rigs/r15.glb")}?v=4`;
-const R6_URL = `${assetPath("/rigs/r6.glb")}?v=4`;
+const R15_URL = `${assetPath("/rigs/r15.glb")}?v=5`;
+const R6_URL = `${assetPath("/rigs/r6.glb")}?v=5`;
+
+const DEFAULT_CAM: [number, number, number] = [2.6, 2.0, 3.4];
+const DEFAULT_TARGET: [number, number, number] = [0, 1.2, 0];
 
 type PoseEulerMap = Map<JointName, THREE.Euler>;
 
@@ -64,14 +68,22 @@ function collectDriveTargets(
     const prev = byName.get(obj.name);
     if (!prev || (obj as THREE.Bone).isBone) {
       byName.set(obj.name, obj);
+      // GLTFLoader turns spaces into underscores — index both forms
+      const spaced = obj.name.replace(/_/g, " ");
+      if (spaced !== obj.name) {
+        const prevSpaced = byName.get(spaced);
+        if (!prevSpaced || (obj as THREE.Bone).isBone) byName.set(spaced, obj);
+      }
     }
   });
 
   const targets: DriveTarget[] = [];
   const used = new Set<THREE.Object3D>();
 
+  const resolve = (name: string) => byName.get(name) || byName.get(name.replace(/ /g, "_"));
+
   for (const [joint, boneName] of Object.entries(boneMap)) {
-    const obj = byName.get(boneName);
+    const obj = resolve(boneName);
     if (obj && !used.has(obj)) {
       targets.push({ joint, obj, rest: obj.rotation.clone() });
       used.add(obj);
@@ -81,7 +93,7 @@ function collectDriveTargets(
   if (meshMap) {
     for (const [joint, meshName] of Object.entries(meshMap)) {
       if (targets.some((t) => t.joint === joint)) continue;
-      const obj = byName.get(meshName);
+      const obj = resolve(meshName);
       if (obj && !used.has(obj)) {
         targets.push({ joint, obj, rest: obj.rotation.clone() });
         used.add(obj);
@@ -270,6 +282,33 @@ function clipForRig(clip: AnimationClip | null, rig: RigType): AnimationClip | n
   return { ...clip, rig };
 }
 
+function PreviewOrbitControls({
+  controlsRef,
+  resetToken,
+}: {
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
+  resetToken: number;
+}) {
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls || resetToken === 0) return;
+    const cam = controls.object as THREE.PerspectiveCamera;
+    cam.position.set(...DEFAULT_CAM);
+    controls.target.set(...DEFAULT_TARGET);
+    controls.update();
+  }, [controlsRef, resetToken]);
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      enablePan={false}
+      minDistance={2}
+      maxDistance={8}
+      target={DEFAULT_TARGET}
+    />
+  );
+}
+
 export function AnimationPreview({
   clip,
   rig = "r15",
@@ -283,7 +322,9 @@ export function AnimationPreview({
 }) {
   const [playing, setPlaying] = useState(autoPlay);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [viewResetToken, setViewResetToken] = useState(0);
   const timeRef = useRef(0);
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
   // Prefer the maker toggle so switching R6/R15 updates the live model immediately
   const activeRig: RigType = rig || clip?.rig || "r15";
   const playClip = useMemo(() => clipForRig(clip, activeRig), [clip, activeRig]);
@@ -295,6 +336,14 @@ export function AnimationPreview({
   }, [clip?.id, autoPlay, activeRig]);
 
   const label = useMemo(() => clip?.name || "No animation yet", [clip]);
+
+  function resetView() {
+    setViewResetToken((n) => n + 1);
+  }
+
+  function resetAnimation() {
+    timeRef.current = 0;
+  }
 
   return (
     <div className="panel relative overflow-hidden">
@@ -308,18 +357,15 @@ export function AnimationPreview({
           </p>
           <p className="font-[family-name:var(--font-display)] text-sm text-white">{label}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button className="btn-ghost text-xs" onClick={() => setPlaying((p) => !p)} disabled={!clip}>
             {playing ? "Pause" : "Play"}
           </button>
-          <button
-            className="btn-ghost text-xs"
-            onClick={() => {
-              timeRef.current = 0;
-            }}
-            disabled={!clip}
-          >
+          <button className="btn-ghost text-xs" onClick={resetAnimation} disabled={!clip}>
             Restart
+          </button>
+          <button className="btn-ghost text-xs" onClick={resetView} type="button">
+            Reset view
           </button>
         </div>
       </div>
@@ -336,7 +382,7 @@ export function AnimationPreview({
           <Suspense fallback={<PreviewFallback label={`Loading ${activeRig.toUpperCase()}…`} />}>
             <Canvas
               key={activeRig}
-              camera={{ position: [2.6, 2.0, 3.4], fov: 40 }}
+              camera={{ position: DEFAULT_CAM, fov: 40 }}
               shadows
               dpr={[1, 1.5]}
               gl={{ antialias: true, powerPreference: "high-performance" }}
@@ -367,7 +413,7 @@ export function AnimationPreview({
               <RigLoadGuard rig={activeRig} onError={setLoadError}>
                 <RigCanvas clip={playClip} playing={playing} timeRef={timeRef} rig={activeRig} />
               </RigLoadGuard>
-              <OrbitControls enablePan={false} minDistance={2} maxDistance={8} target={[0, 1.2, 0]} />
+              <PreviewOrbitControls controlsRef={controlsRef} resetToken={viewResetToken} />
             </Canvas>
           </Suspense>
         )}
