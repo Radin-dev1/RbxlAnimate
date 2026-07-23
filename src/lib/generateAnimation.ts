@@ -1,6 +1,5 @@
 import type { AnimStyle, AnimationClip, JointName, Keyframe, JointPose, RigType } from "./types";
 import { MAX_ANIMATION_SECONDS, R15_JOINTS } from "./types";
-import { r15PosesToR6 } from "./rigMap";
 
 const ALL_JOINTS: JointName[] = R15_JOINTS;
 
@@ -241,13 +240,17 @@ function parseStep(segment: string, style: AnimStyle, rand: () => number): Motio
     }
   }
   if (!verb) {
-    const styleDefault: Record<AnimStyle, MotionVerb> = {
-      emote: "dance",
-      combat: "punch",
-      idle: "idle",
-      walk: "walk",
-    };
-    verb = styleDefault[style];
+    // Hash-based variety so unknown prompts don't all become the same dance
+    const pool: MotionVerb[] =
+      style === "combat"
+        ? ["punch", "kick", "dodge", "block", "slash", "stomp"]
+        : style === "walk"
+          ? ["walk", "run", "hop"]
+          : style === "idle"
+            ? ["idle", "look", "shrug"]
+            : ["wave", "spin", "flex", "dance", "victory", "bow", "clap", "salute", "hop", "jump"];
+    const idx = Math.floor(rand() * pool.length) % pool.length;
+    verb = pool[idx];
   }
   const intense = /\b(hard|heavy|powerful|fierce|epic|big|strong|fast)\b/.test(segment);
   const soft = /\b(soft|gentle|slow|subtle|light|chill)\b/.test(segment);
@@ -262,10 +265,12 @@ function parseMotionGrammar(
 ): MotionStep[] {
   const segments = splitSequence(prompt);
   const steps = segments.map((seg) => parseStep(seg, style, rand));
-  if (steps.length === 1 && style === "walk") {
+  // Never collapse a specific prompt into a single walk/idle loop when verbs were found
+  const hasConcrete = steps.some((s) => s.verb !== "idle" && s.verb !== "walk" && s.verb !== "run");
+  if (!hasConcrete && steps.length === 1 && style === "walk") {
     return [{ verb: /run|sprint/.test(prompt.toLowerCase()) ? "run" : "walk", focus: "full", intensity: 1, weight: 1 }];
   }
-  if (steps.length === 1 && style === "idle") {
+  if (!hasConcrete && steps.length === 1 && style === "idle" && /\b(idle|stand|breathe|wait|afk)\b/.test(prompt.toLowerCase())) {
     return [{ verb: "idle", focus: "full", intensity: 0.85, weight: 1 }];
   }
   return steps;
@@ -995,22 +1000,30 @@ export function generateAnimationFromPrompt(opts: {
   source?: "text" | "video";
   rig?: RigType;
   intensity?: number;
-}): AnimationClip {
-  const rig: RigType = opts.rig === "r6" ? "r6" : "r15";
-  const style = detectStyle(opts.prompt, opts.style);
-  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v4-flip`);
+  /** Extra entropy so regenerating the same prompt can vary */
+  variation?: number;
+  /** Prefer prompt-detected style over the dropdown when clear */
+  preferPromptStyle?: boolean;
+}): AnimationClip & { parsedSteps?: string[] } {
+  const rig: RigType = "r15";
+  const detected = detectStyle(opts.prompt, opts.style);
+  const style =
+    opts.preferPromptStyle !== false && opts.prompt.trim().length > 0 ? detected : opts.style;
+  const salt = opts.variation != null ? `|var:${opts.variation}` : `|t:${Date.now() % 100000}`;
+  const seed = hashPrompt(`${opts.prompt}|${style}|${opts.quality}|${rig}|v5${salt}`);
   const rand = seeded(seed);
   const high = opts.quality === "high";
   const intensityBoost = (opts.intensity ?? 1) * (high ? 1.12 : 0.95);
-  const loopable = style === "walk" || style === "idle";
+  const loopable =
+    (style === "walk" || style === "idle") &&
+    !/\b(then|flip|punch|kick|dance|wave|spin)\b/i.test(opts.prompt);
 
   const steps = parseMotionGrammar(opts.prompt, style, rand).map((s) => ({
     ...s,
     intensity: s.intensity * intensityBoost,
   }));
   const hasFlip = steps.some((s) => isFlipVerb(s.verb));
-  // Flips need denser keys so the 360° reads smoothly
-  const frames = hasFlip ? (high ? 96 : 64) : high ? 64 : 28;
+  const frames = hasFlip ? (high ? 96 : 64) : high ? 72 : 36;
   const phases = buildPhases(steps, loopable);
 
   const inferred = inferDurationSeconds({
@@ -1024,23 +1037,19 @@ export function generateAnimationFromPrompt(opts: {
   const keyframes: Keyframe[] = [];
   for (let i = 0; i <= frames; i++) {
     const t = i / frames;
-    // Slight arc bias for Pro: sample with eased temporal distribution
-    const sampleT = high ? ease("smooth", t) * 0.15 + t * 0.85 : t;
-    let poses = sampleTimeline(phases, sampleT, high, style, loopable);
-    if (rig === "r6") poses = r15PosesToR6(poses);
+    const sampleT = t; // linear sampling — easing already inside phases
+    const poses = sampleTimeline(phases, sampleT, high, style, loopable);
     keyframes.push({ time: Number((t * duration).toFixed(4)), poses: clonePose(poses) });
   }
 
-  // Ensure clean settle on non-looping clips
   if (!loopable) {
     const last = keyframes[keyframes.length - 1];
-    const rest = rig === "r6" ? r15PosesToR6(restPose()) : restPose();
+    const rest = restPose();
     keyframes[keyframes.length - 1] = {
       time: duration,
       poses: blend(last.poses, rest, high ? 0.92 : 0.8),
     };
   } else {
-    // Close the loop: match first pose at end
     keyframes[keyframes.length - 1] = {
       time: duration,
       poses: clonePose(keyframes[0].poses),
@@ -1053,6 +1062,7 @@ export function generateAnimationFromPrompt(opts: {
       : `anim_${Date.now()}_${seed.toString(16)}`;
 
   const short = opts.prompt.trim().slice(0, 42) || "Untitled motion";
+  const parsedSteps = steps.map((s) => s.verb);
 
   return {
     id,
@@ -1065,6 +1075,38 @@ export function generateAnimationFromPrompt(opts: {
     source: opts.source || "text",
     createdAt: new Date().toISOString(),
     keyframes,
+    parsedSteps,
+  };
+}
+
+/** Build a counter-fighter clip (mirrored / offset) for Duel mode */
+export function generateDuelOpponent(hero: AnimationClip, variation = Math.random()): AnimationClip {
+  const counterPrompt =
+    /sword|blade|slash/i.test(hero.prompt)
+      ? "block then slash then dodge"
+      : /box|punch|fight|duel|combat/i.test(hero.prompt)
+        ? "dodge then punch then kick then block"
+        : "block then punch then dodge then kick";
+  const opp = generateAnimationFromPrompt({
+    prompt: counterPrompt,
+    style: "combat",
+    quality: hero.quality,
+    source: hero.source,
+    intensity: 1.05,
+    variation,
+    preferPromptStyle: true,
+  });
+  // Align duration roughly
+  const scale = hero.duration / Math.max(0.01, opp.duration);
+  return {
+    ...opp,
+    id: `${hero.id}-rival`,
+    name: `Rival vs ${hero.name}`.slice(0, 42),
+    duration: hero.duration,
+    keyframes: opp.keyframes.map((kf) => ({
+      ...kf,
+      time: Math.min(hero.duration, kf.time * scale),
+    })),
   };
 }
 

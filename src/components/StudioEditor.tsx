@@ -4,17 +4,29 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimationPreview } from "./AnimationPreview";
 import { BuyUsageModal } from "./BuyUsageModal";
-import { generateAnimationFromPrompt, clipToRobloxExport } from "@/lib/generateAnimation";
+import {
+  generateAnimationFromPrompt,
+  generateDuelOpponent,
+  clipToRobloxExport,
+} from "@/lib/generateAnimation";
+import { fetchYoutubeMeta } from "@/lib/youtube";
 import { useAppStore } from "@/lib/store";
-import type { AnimStyle, PreviewMode, RigType } from "@/lib/types";
+import type { AnimStyle, PreviewMode } from "@/lib/types";
 
 const PROMPT_CHIPS = [
   "backflip",
   "frontflip then victory",
   "spin then kick then victory",
   "wave both arms then point at camera",
-  "combat: punch then dodge then slash",
-  "walk cycle confident stride",
+  "punch then dodge then slash",
+  "dance then flex then clap",
+];
+
+const DUEL_CHIPS = [
+  "boxing match punch dodge kick",
+  "sword fight slash block slash",
+  "street brawl punch kick stomp",
+  "anime duel slash dodge slash",
 ];
 
 export function StudioEditor() {
@@ -31,38 +43,44 @@ export function StudioEditor() {
 
   const [prompt, setPrompt] = useState("backflip");
   const [style, setStyle] = useState<AnimStyle>(settings.defaultStyle);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>(
-    (settings.defaultPreviewMode as PreviewMode) || settings.defaultRig || "r15",
+  const [mode, setMode] = useState<PreviewMode>(
+    settings.defaultPreviewMode === "duel" ? "duel" : "solo",
   );
   const [intensity, setIntensity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parsedInfo, setParsedInfo] = useState<string | null>(null);
   const [buyOpen, setBuyOpen] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [ytPreview, setYtPreview] = useState<{
+    title: string;
+    thumbnail: string;
+    inferred: string;
+  } | null>(null);
 
   const activeClip = useMemo(
     () => library.find((c) => c.id === activeClipId) || library[0] || null,
     [library, activeClipId],
   );
 
-  const generateRig: RigType = previewMode === "r6" ? "r6" : "r15";
-
-  async function generate(source: "text" | "video") {
+  async function runGenerate(opts: {
+    source: "text" | "video";
+    promptText: string;
+    youtube?: { id: string; title?: string; thumbnail?: string };
+  }) {
     setError(null);
+    setParsedInfo(null);
     if (!user) {
       setError("Sign in to generate animations.");
       return;
     }
-    if (source === "video" && plan !== "pro") {
-      setError("Video → animation is a Pro feature.");
-      return;
-    }
-    if (source === "video" && !videoFile) {
-      setError("Choose a short video clip first.");
-      return;
-    }
-    if (!prompt.trim() && source === "text") {
+    if (!opts.promptText.trim()) {
       setError("Describe the animation you want.");
+      return;
+    }
+    if (opts.source === "video" && plan !== "pro") {
+      setError("Video / YouTube → animation is a Pro feature.");
       return;
     }
 
@@ -77,24 +95,90 @@ export function StudioEditor() {
 
     setBusy(true);
     try {
-      await new Promise((r) => setTimeout(r, highQualityDelay(quality)));
+      await new Promise((r) => setTimeout(r, quality === "high" ? 480 : 280));
+      const heroPrompt =
+        mode === "duel" && !/punch|kick|slash|dodge|fight|duel|box/i.test(opts.promptText)
+          ? `${opts.promptText} then punch then dodge`
+          : opts.promptText;
+
       const clip = generateAnimationFromPrompt({
-        prompt:
-          source === "video"
-            ? `video motion: ${prompt || videoFile?.name || "uploaded clip"}`
-            : prompt,
-        style,
+        prompt: heroPrompt,
+        style: mode === "duel" ? "combat" : style,
         quality,
-        source,
-        // Dual stores R15 master; R6 side converts in the preview
-        rig: generateRig,
+        source: opts.source,
+        rig: "r15",
         intensity,
+        variation: Math.random(),
+        preferPromptStyle: true,
       });
+
+      if (mode === "duel") {
+        const rival = generateDuelOpponent(clip, Math.random());
+        clip.rival = rival;
+        clip.duelSide = "A";
+        rival.duelSide = "B";
+        rival.duelPartnerId = clip.id;
+        clip.duelPartnerId = rival.id;
+      }
+
+      if (opts.youtube) clip.youtube = opts.youtube;
+
+      setParsedInfo(
+        `Parsed: ${(clip.parsedSteps || []).join(" → ") || "motion"}${
+          mode === "duel" ? " · Duel rival generated" : ""
+        }`,
+      );
       addClip(clip);
     } catch {
       setError("Generation failed. Try again.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function generateText() {
+    await runGenerate({ source: "text", promptText: prompt });
+  }
+
+  async function generateFromFile() {
+    if (!videoFile) {
+      setError("Choose a short video file first.");
+      return;
+    }
+    await runGenerate({
+      source: "video",
+      promptText: prompt || `video motion from ${videoFile.name}`,
+    });
+  }
+
+  async function generateFromYoutube() {
+    if (!youtubeUrl.trim()) {
+      setError("Paste a YouTube link first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const meta = await fetchYoutubeMeta(youtubeUrl, prompt);
+      if (!meta) {
+        setError("Could not parse that YouTube URL.");
+        setBusy(false);
+        return;
+      }
+      setYtPreview({
+        title: meta.title,
+        thumbnail: meta.thumbnail,
+        inferred: meta.inferredPrompt,
+      });
+      setBusy(false);
+      await runGenerate({
+        source: "video",
+        promptText: meta.inferredPrompt,
+        youtube: { id: meta.id, title: meta.title, thumbnail: meta.thumbnail },
+      });
+    } catch {
+      setBusy(false);
+      setError("YouTube lookup failed. Try again or describe the motion in the prompt.");
     }
   }
 
@@ -108,7 +192,19 @@ export function StudioEditor() {
     a.download = `${activeClip.name.replace(/\s+/g, "_")}.rbxlAnimate.json`;
     a.click();
     URL.revokeObjectURL(url);
+    if (activeClip.rival) {
+      const rivalPayload = clipToRobloxExport(activeClip.rival);
+      const blob2 = new Blob([JSON.stringify(rivalPayload, null, 2)], { type: "application/json" });
+      const url2 = URL.createObjectURL(blob2);
+      const a2 = document.createElement("a");
+      a2.href = url2;
+      a2.download = `${activeClip.rival.name.replace(/\s+/g, "_")}.rbxlAnimate.json`;
+      a2.click();
+      URL.revokeObjectURL(url2);
+    }
   }
+
+  const chips = mode === "duel" ? DUEL_CHIPS : PROMPT_CHIPS;
 
   return (
     <div className="relative overflow-hidden">
@@ -116,7 +212,6 @@ export function StudioEditor() {
       <div className="pointer-events-none absolute inset-0">
         <div className="animate-pulse-red absolute -left-28 top-10 h-[22rem] w-[22rem] rounded-full bg-brand/20 blur-[90px]" />
         <div className="animate-drift absolute -right-20 top-24 h-[26rem] w-[26rem] rounded-full bg-brand/12 blur-[100px]" />
-        <div className="animate-float absolute bottom-10 left-1/3 h-48 w-48 rounded-full bg-brand/8 blur-[70px]" />
       </div>
 
       <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-10">
@@ -127,8 +222,8 @@ export function StudioEditor() {
             <span className="block text-brand brand-glow">move.</span>
           </h1>
           <p className="mt-4 max-w-xl text-base text-muted md:text-lg">
-            Prompt multi-step Roblox motion. Preview on real R15 / R6 Blender rigs. Export clean
-            KeyframeSequence JSON — never watermarked.
+            Prompt real Roblox motion on R15. Solo emotes or Duel fights — export clean JSON, never
+            watermarked.
           </p>
         </div>
 
@@ -136,7 +231,8 @@ export function StudioEditor() {
           <div className="space-y-4">
             <AnimationPreview
               clip={activeClip}
-              rig={previewMode}
+              rivalClip={activeClip?.rival || null}
+              mode={mode}
               autoPlay={settings.autoPlayPreview}
               generating={busy}
             />
@@ -144,18 +240,19 @@ export function StudioEditor() {
               <div className="panel panel-inset p-3.5">
                 <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-muted">Recent</p>
                 <div className="flex flex-wrap gap-2">
-                  {library.slice(0, 8).map((clip) => (
+                  {library.slice(0, 8).map((c) => (
                     <button
-                      key={clip.id}
+                      key={c.id}
                       type="button"
-                      onClick={() => setActiveClip(clip.id)}
+                      onClick={() => setActiveClip(c.id)}
                       className={`rounded-xl border px-3 py-1.5 text-xs transition ${
-                        clip.id === activeClip?.id
-                          ? "border-brand bg-brand/20 text-white shadow-[0_0_20px_rgba(225,6,0,0.2)]"
+                        c.id === activeClip?.id
+                          ? "border-brand bg-brand/20 text-white"
                           : "border-border text-muted hover:border-brand/60 hover:text-white"
                       }`}
                     >
-                      {clip.name}
+                      {c.rival ? "⚔ " : ""}
+                      {c.name}
                     </button>
                   ))}
                 </div>
@@ -171,18 +268,43 @@ export function StudioEditor() {
               </h2>
             </div>
 
+            <div className="space-y-2">
+              <span className="text-sm text-muted">Mode</span>
+              <div className="rig-toggle" role="group" aria-label="Preview mode">
+                {(["solo", "duel"] as PreviewMode[]).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={mode === id ? "is-active" : ""}
+                    onClick={() => {
+                      setMode(id);
+                      updateSettings({ defaultPreviewMode: id, defaultRig: "r15" });
+                      if (id === "duel") setStyle("combat");
+                    }}
+                  >
+                    {id === "duel" ? "Duel fight" : "Solo"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted">
+                {mode === "duel"
+                  ? "Two R15 avatars face off — you vs rival with counter moves."
+                  : "One R15 character. Prompt drives the exact moves (backflip, wave, …)."}
+              </p>
+            </div>
+
             <label className="block space-y-2">
               <span className="text-sm text-muted">Prompt</span>
               <textarea
-                className="input min-h-[118px] resize-y"
+                className="input min-h-[110px] resize-y"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="spin then kick then victory pose"
+                placeholder={mode === "duel" ? "boxing match punch dodge kick" : "backflip"}
               />
             </label>
 
             <div className="flex flex-wrap gap-2">
-              {PROMPT_CHIPS.map((chip) => (
+              {chips.map((chip) => (
                 <button
                   key={chip}
                   type="button"
@@ -194,44 +316,21 @@ export function StudioEditor() {
               ))}
             </div>
 
-            <label className="block space-y-2">
-              <span className="text-sm text-muted">Style</span>
-              <select
-                className="input"
-                value={style}
-                onChange={(e) => setStyle(e.target.value as AnimStyle)}
-              >
-                <option value="emote">Emote</option>
-                <option value="combat">Combat</option>
-                <option value="idle">Idle</option>
-                <option value="walk">Walk</option>
-              </select>
-            </label>
-
-            <div className="space-y-2">
-              <span className="text-sm text-muted">Rig</span>
-              <div className="rig-toggle" role="group" aria-label="Rig type">
-                {(["r15", "r6", "dual"] as PreviewMode[]).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    className={previewMode === id ? "is-active" : ""}
-                    onClick={() => {
-                      setPreviewMode(id);
-                      updateSettings({
-                        defaultPreviewMode: id,
-                        defaultRig: id === "dual" ? "r15" : id,
-                      });
-                    }}
-                  >
-                    {id === "dual" ? "Dual" : id.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted">
-                Dual shows R15 and R6 side by side playing the same animation.
-              </p>
-            </div>
+            {mode === "solo" && (
+              <label className="block space-y-2">
+                <span className="text-sm text-muted">Style hint (prompt wins if clear)</span>
+                <select
+                  className="input"
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value as AnimStyle)}
+                >
+                  <option value="emote">Emote</option>
+                  <option value="combat">Combat</option>
+                  <option value="idle">Idle</option>
+                  <option value="walk">Walk</option>
+                </select>
+              </label>
+            )}
 
             <label className="block space-y-2">
               <span className="text-sm text-muted">Intensity ({intensity.toFixed(1)}x)</span>
@@ -246,28 +345,69 @@ export function StudioEditor() {
               />
             </label>
 
-            <div className="rounded-2xl border border-border bg-black/40 p-3.5">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-semibold">Video → animation</p>
+            <div className="rounded-2xl border border-border bg-black/40 p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">YouTube → animation</p>
                 <span className="rounded-md bg-brand/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
                   Pro
                 </span>
               </div>
+              <p className="text-[11px] text-muted">
+                Paste a link — we read the title (oEmbed) and infer motion. Not full pose-tracking ML
+                on Pages.
+              </p>
               <input
-                type="file"
-                accept="video/*"
-                className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                className="input text-sm"
+                placeholder="https://youtube.com/watch?v=…"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
               />
+              {ytPreview && (
+                <div className="flex gap-3 rounded-xl border border-border/80 bg-black/40 p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={ytPreview.thumbnail}
+                    alt=""
+                    className="h-14 w-24 rounded-lg object-cover"
+                  />
+                  <div className="min-w-0 text-xs">
+                    <p className="truncate font-medium text-white">{ytPreview.title}</p>
+                    <p className="mt-1 text-muted">Interpreted as: {ytPreview.inferred}</p>
+                  </div>
+                </div>
+              )}
               <button
-                className="btn-ghost mt-3 w-full text-sm"
+                className="btn-ghost w-full text-sm"
                 disabled={busy}
                 type="button"
-                onClick={() => generate("video")}
+                onClick={() => generateFromYoutube()}
               >
-                Generate from video
+                Generate from YouTube
               </button>
+              <div className="border-t border-border/60 pt-3">
+                <p className="mb-2 text-[11px] text-muted">Or upload a clip</p>
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+                  onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                />
+                <button
+                  className="btn-ghost mt-2 w-full text-sm"
+                  disabled={busy}
+                  type="button"
+                  onClick={() => generateFromFile()}
+                >
+                  Generate from file
+                </button>
+              </div>
             </div>
+
+            {parsedInfo && (
+              <p className="rounded-xl border border-brand/30 bg-brand/10 px-3 py-2 text-xs text-red-100">
+                {parsedInfo}
+              </p>
+            )}
 
             {error && (
               <p className="rounded-xl border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-red-100">
@@ -285,12 +425,21 @@ export function StudioEditor() {
                 className={`btn-primary ${busy ? "is-busy" : ""}`}
                 disabled={busy}
                 type="button"
-                onClick={() => generate("text")}
+                onClick={() => generateText()}
               >
-                {busy ? "Animating…" : "Generate animation"}
+                {busy ? "Animating…" : mode === "duel" ? "Generate duel" : "Generate animation"}
+              </button>
+              <button
+                className="btn-ghost"
+                disabled={busy || !prompt.trim()}
+                type="button"
+                onClick={() => generateText()}
+                title="Same prompt, new random variation"
+              >
+                Surprise variation
               </button>
               <button className="btn-ghost" disabled={!activeClip} type="button" onClick={exportClip}>
-                Export
+                Export{activeClip?.rival ? " both" : ""}
               </button>
               <button className="btn-ghost" type="button" onClick={() => setBuyOpen(true)}>
                 Buy usage
@@ -298,8 +447,8 @@ export function StudioEditor() {
             </div>
 
             <p className="text-xs text-muted">
-              {usageRemaining} generations left · {plan === "pro" ? "Pro quality unlocked" : "Free plan"} ·
-              exports never watermarked
+              {usageRemaining} gens left · {plan === "pro" ? "Pro" : "Free"} · R15 only · no
+              watermarks
             </p>
           </div>
         </div>
@@ -308,8 +457,4 @@ export function StudioEditor() {
       <BuyUsageModal open={buyOpen} onClose={() => setBuyOpen(false)} />
     </div>
   );
-}
-
-function highQualityDelay(quality: "standard" | "high") {
-  return quality === "high" ? 520 : 320;
 }

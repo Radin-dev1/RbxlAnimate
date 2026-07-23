@@ -127,21 +127,20 @@ export default function SettingsPage() {
           </select>
         </label>
         <label className="block space-y-1 text-sm">
-          Default rig / preview
+          Default mode
           <select
             className="input"
-            value={settings.defaultPreviewMode || settings.defaultRig || "r15"}
+            value={settings.defaultPreviewMode === "duel" ? "duel" : "solo"}
             onChange={(e) => {
-              const v = e.target.value as "r15" | "r6" | "dual";
+              const v = e.target.value as "solo" | "duel";
               updateSettings({
                 defaultPreviewMode: v,
-                defaultRig: v === "dual" ? "r15" : v,
+                defaultRig: "r15",
               });
             }}
           >
-            <option value="r15">R15</option>
-            <option value="r6">R6</option>
-            <option value="dual">Dual (R15 + R6)</option>
+            <option value="solo">Solo (one R15)</option>
+            <option value="duel">Duel fight (two R15)</option>
           </select>
         </label>
         <Toggle

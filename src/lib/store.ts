@@ -14,8 +14,8 @@ export interface DemoUser {
 
 interface UserSettings {
   defaultStyle: AnimStyle;
-  defaultRig: "r15" | "r6";
-  defaultPreviewMode: "r15" | "r6" | "dual";
+  defaultRig: "r15";
+  defaultPreviewMode: "solo" | "duel";
   themeId: ThemeId;
   autoPlayPreview: boolean;
   exportFormat: "json" | "plugin";
@@ -61,7 +61,7 @@ interface AppState {
 const defaultSettings: UserSettings = {
   defaultStyle: "emote",
   defaultRig: "r15",
-  defaultPreviewMode: "r15",
+  defaultPreviewMode: "solo",
   themeId: DEFAULT_THEME_ID,
   autoPlayPreview: true,
   exportFormat: "json",

@@ -2,12 +2,13 @@ export type Plan = "free" | "pro";
 
 export type AnimStyle = "emote" | "combat" | "idle" | "walk";
 
+/** Clips always use R15; r6 kept only for legacy library entries. */
 export type RigType = "r15" | "r6";
 
-/** Preview / maker selection — dual shows both rigs at once */
-export type PreviewMode = RigType | "dual";
+/** Studio preview: one fighter or two fighting. */
+export type PreviewMode = "solo" | "duel";
 
-/** Canonical joint names used in clips. R15 uses full set; R6 uses a subset. */
+/** Canonical joint names used in clips (R15). Legacy R6 names may appear in old clips. */
 export type JointName =
   | "Root"
   | "LowerTorso"
@@ -50,6 +51,7 @@ export const R15_JOINTS: JointName[] = [
   "RightFoot",
 ];
 
+/** @deprecated R6 removed from maker; kept for legacy clip conversion. */
 export const R6_JOINTS: JointName[] = [
   "Root",
   "Torso",
@@ -78,30 +80,6 @@ export const R15_BONE_MAP: Record<string, string> = {
   RightUpperLeg: "RightUpperLeg",
   RightLowerLeg: "RightLowerLeg",
   RightFoot: "RightFoot",
-};
-
-/**
- * Matches R6 bones after GLTFLoader sanitizes spaces → underscores
- * (Blender "Left Arm" becomes Three.js "Left_Arm").
- */
-export const R6_BONE_MAP: Record<string, string> = {
-  Root: "HumanoidRootPart",
-  Torso: "Torso",
-  Head: "Head",
-  LeftArm: "Left_Arm",
-  RightArm: "Right_Arm",
-  LeftLeg: "Left_Leg",
-  RightLeg: "Right_Leg",
-};
-
-/** Fallback: drive mesh Object3Ds by sanitized glTF names */
-export const R6_MESH_MAP: Record<string, string> = {
-  Head: "Head_MBlocky",
-  Torso: "Torso_MBlocky",
-  LeftArm: "Left_Arm_MBlocky",
-  RightArm: "Right_Arm_MBlocky",
-  LeftLeg: "Left_Leg_MBlocky",
-  RightLeg: "Right_Leg_MBlocky",
 };
 
 /** Hard cap for any generated / imported clip length (7 minutes). */
@@ -135,6 +113,14 @@ export interface AnimationClip {
   source: "text" | "video";
   createdAt: string;
   keyframes: Keyframe[];
+  /** Parsed motion steps shown in UI after generate */
+  parsedSteps?: string[];
+  /** Duel: partner clip id (You ↔ Rival) */
+  duelPartnerId?: string;
+  duelSide?: "A" | "B";
+  /** Nested rival clip for duel playback */
+  rival?: AnimationClip;
+  youtube?: { id: string; title?: string; thumbnail?: string };
 }
 
 export const FREE_MONTHLY_USAGE = 10;
