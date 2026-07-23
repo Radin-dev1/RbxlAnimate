@@ -62,11 +62,23 @@ export function AppHeader() {
             <span>{usageRemaining} gens</span>
           </div>
           {user ? (
-            <button className="btn-ghost text-sm" onClick={() => signOut()} type="button">
-              Sign out
-            </button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span
+                className="hidden max-w-[9rem] truncate rounded-xl border border-border/80 bg-black/40 px-3 py-1.5 text-xs text-muted md:inline-block"
+                title={user.email}
+              >
+                {user.name}
+              </span>
+              <button
+                className="btn-ghost px-3 py-1.5 text-sm sm:px-4"
+                onClick={() => signOut()}
+                type="button"
+              >
+                Sign out
+              </button>
+            </div>
           ) : (
-            <Link href="/login" className="btn-primary text-sm">
+            <Link href="/login" className="btn-primary px-3 py-1.5 text-sm sm:px-4">
               Sign in
             </Link>
           )}
