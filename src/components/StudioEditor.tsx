@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { AnimationPreview } from "./AnimationPreview";
 import { BuyUsageModal } from "./BuyUsageModal";
 import {
   generateAnimationFromPrompt,
   generateDuelOpponent,
   clipToRobloxExport,
+  clipToRobloxExportString,
 } from "@/lib/generateAnimation";
 import { fetchYoutubeMeta } from "@/lib/youtube";
 import { useAppStore } from "@/lib/store";
@@ -31,6 +31,7 @@ const DUEL_CHIPS = [
 
 export function StudioEditor() {
   const user = useAppStore((s) => s.user);
+  const signIn = useAppStore((s) => s.signIn);
   const settings = useAppStore((s) => s.settings);
   const plan = useAppStore((s) => s.plan);
   const usageRemaining = useAppStore((s) => s.usageRemaining);
@@ -71,17 +72,13 @@ export function StudioEditor() {
   }) {
     setError(null);
     setParsedInfo(null);
-    if (!user) {
-      setError("Sign in to generate animations.");
-      return;
-    }
     if (!opts.promptText.trim()) {
       setError("Describe the animation you want.");
       return;
     }
-    if (opts.source === "video" && plan !== "pro") {
-      setError("Video / YouTube → animation is a Pro feature.");
-      return;
+    // Guest-friendly: auto-create a local session if needed
+    if (!user) {
+      signIn("guest@rbxlAnimate.local", { name: "Guest" });
     }
 
     const quality =
@@ -95,7 +92,8 @@ export function StudioEditor() {
 
     setBusy(true);
     try {
-      await new Promise((r) => setTimeout(r, quality === "high" ? 480 : 280));
+      // Yield one frame so the Generating state paints, then generate immediately
+      await new Promise((r) => requestAnimationFrame(() => r(undefined)));
       const heroPrompt =
         mode === "duel" && !/punch|kick|slash|dodge|fight|duel|box/i.test(opts.promptText)
           ? `${opts.promptText} then punch then dodge`
@@ -204,6 +202,20 @@ export function StudioEditor() {
     }
   }
 
+  async function copyForStudio() {
+    if (!activeClip) return;
+    try {
+      await navigator.clipboard.writeText(clipToRobloxExportString(activeClip));
+      setParsedInfo(
+        activeClip.rival
+          ? "Copied hero JSON for Studio. Download JSONs for the rival clip too."
+          : "Copied JSON — paste into the rbxlAnimate Studio plugin importer.",
+      );
+    } catch {
+      setError("Clipboard blocked — use Download JSON instead.");
+    }
+  }
+
   const chips = mode === "duel" ? DUEL_CHIPS : PROMPT_CHIPS;
 
   return (
@@ -222,8 +234,8 @@ export function StudioEditor() {
             <span className="block text-brand brand-glow">move.</span>
           </h1>
           <p className="mt-4 max-w-xl text-base text-muted md:text-lg">
-            Prompt real Roblox motion on R15. Solo emotes or Duel fights — export clean JSON, never
-            watermarked.
+            Type a move (or a whole combo), preview on R15, then Copy for Studio — paste into the
+            plugin and it lands in AnimSaves. Solo or Duel. No watermarks.
           </p>
         </div>
 
@@ -347,14 +359,14 @@ export function StudioEditor() {
 
             <div className="rounded-2xl border border-border bg-black/40 p-3.5 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">YouTube → animation</p>
-                <span className="rounded-md bg-brand/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand">
-                  Pro
+                <p className="text-sm font-semibold">YouTube → motion idea</p>
+                <span className="rounded-md border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                  Title infer
                 </span>
               </div>
               <p className="text-[11px] text-muted">
-                Paste a link — we read the title (oEmbed) and infer motion. Not full pose-tracking ML
-                on Pages.
+                We read the video <strong className="text-white/80">title</strong> (not pixels) and
+                turn it into a motion prompt. Free to try.
               </p>
               <input
                 className="input text-sm"
@@ -382,10 +394,12 @@ export function StudioEditor() {
                 type="button"
                 onClick={() => generateFromYoutube()}
               >
-                Generate from YouTube
+                Infer & generate from YouTube
               </button>
               <div className="border-t border-border/60 pt-3">
-                <p className="mb-2 text-[11px] text-muted">Or upload a clip</p>
+                <p className="mb-2 text-[11px] text-muted">
+                  File upload uses the filename + your prompt (no frame analysis on Pages).
+                </p>
                 <input
                   type="file"
                   accept="video/*"
@@ -398,7 +412,7 @@ export function StudioEditor() {
                   type="button"
                   onClick={() => generateFromFile()}
                 >
-                  Generate from file
+                  Generate from file name + prompt
                 </button>
               </div>
             </div>
@@ -411,12 +425,7 @@ export function StudioEditor() {
 
             {error && (
               <p className="rounded-xl border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-red-100">
-                {error}{" "}
-                {error.includes("Sign in") && (
-                  <Link href="/login" className="underline">
-                    Go to login
-                  </Link>
-                )}
+                {error}
               </p>
             )}
 
@@ -436,18 +445,27 @@ export function StudioEditor() {
                 onClick={() => generateText()}
                 title="Same prompt, new random variation"
               >
-                Surprise variation
+                New variation
               </button>
               <button className="btn-ghost" disabled={!activeClip} type="button" onClick={exportClip}>
-                Export{activeClip?.rival ? " both" : ""}
+                Download JSON{activeClip?.rival ? "s" : ""}
+              </button>
+              <button className="btn-ghost" disabled={!activeClip} type="button" onClick={copyForStudio}>
+                Copy for Studio
               </button>
               <button className="btn-ghost" type="button" onClick={() => setBuyOpen(true)}>
                 Buy usage
               </button>
             </div>
 
+            <div className="rounded-xl border border-border/80 bg-black/30 px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+              <strong className="text-white/90">Studio:</strong> install{" "}
+              <code className="text-white/80">plugin/RbxlAnimate.plugin.luau</code> → select R15 →
+              paste JSON → Apply. Opens in AnimSaves for the Animation Editor.
+            </div>
+
             <p className="text-xs text-muted">
-              {usageRemaining} gens left · {plan === "pro" ? "Pro" : "Free"} · R15 only · no
+              {usageRemaining} gens left · {plan === "pro" ? "Pro" : "Free"} · guest OK · no
               watermarks
             </p>
           </div>

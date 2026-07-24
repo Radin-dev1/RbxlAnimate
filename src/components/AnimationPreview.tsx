@@ -197,23 +197,47 @@ export function AnimationPreview({
   const [reverse, setReverse] = useState(false);
   const [mirror, setMirror] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [scrub, setScrub] = useState(0);
   const [viewResetToken, setViewResetToken] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
   const timeRef = useRef(0);
   const rivalTimeRef = useRef(0);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const duel = mode === "duel";
   const rival = rivalClip || clip?.rival || null;
+  const duration = clip?.duration || 1;
 
   useEffect(() => {
     setPlaying(autoPlay);
     timeRef.current = 0;
     rivalTimeRef.current = 0.15;
+    setScrub(0);
     setLoadError(null);
   }, [clip?.id, rival?.id, autoPlay, mode]);
 
   // Stop at end if not looping
   useFrameSafeStop(playing, loop, clip, timeRef, setPlaying);
+
+  // Drive scrubber UI from playback clock
+  useEffect(() => {
+    if (!clip || scrubbing) return;
+    let raf = 0;
+    const tick = () => {
+      const t = ((timeRef.current % duration) + duration) % duration;
+      setScrub(t);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [clip, duration, scrubbing, playing]);
+
+  function seekTo(t: number) {
+    const clamped = Math.min(Math.max(t, 0), duration);
+    timeRef.current = clamped;
+    rivalTimeRef.current = clamped + 0.15;
+    setScrub(clamped);
+  }
 
   const label = clip?.name || "No animation yet";
 
@@ -337,20 +361,49 @@ export function AnimationPreview({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-border/80 px-4 py-2.5">
-        <label className="flex items-center gap-2 text-xs text-muted">
-          Speed {speed.toFixed(1)}x
+      <div className="space-y-2 border-t border-border/80 px-4 py-2.5">
+        <div className="flex items-center gap-3">
+          <span className="w-10 shrink-0 tabular-nums text-[11px] text-muted">
+            {scrub.toFixed(2)}s
+          </span>
           <input
-            className="range w-28"
+            className="range flex-1"
             type="range"
-            min={0.5}
-            max={2}
-            step={0.1}
-            value={speed}
-            onChange={(e) => setSpeed(Number(e.target.value))}
+            min={0}
+            max={duration}
+            step={0.01}
+            value={Math.min(scrub, duration)}
+            disabled={!clip}
+            aria-label="Timeline scrubber"
+            onPointerDown={() => {
+              setScrubbing(true);
+              setPlaying(false);
+            }}
+            onPointerUp={() => setScrubbing(false)}
+            onChange={(e) => seekTo(Number(e.target.value))}
           />
-        </label>
-        {duel && <span className="text-[11px] text-muted">You (left) · Rival (right)</span>}
+          <span className="w-10 shrink-0 text-right tabular-nums text-[11px] text-muted">
+            {duration.toFixed(2)}s
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-muted">
+            Speed {speed.toFixed(1)}x
+            <input
+              className="range w-28"
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+            />
+          </label>
+          {duel && <span className="text-[11px] text-muted">You (left) · Rival (right)</span>}
+          {clip?.keyframes?.length ? (
+            <span className="text-[11px] text-muted">{clip.keyframes.length} keys</span>
+          ) : null}
+        </div>
       </div>
     </div>
   );

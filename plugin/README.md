@@ -1,18 +1,28 @@
-# rbxlAnimate Studio Plugin (Phase 2)
+# rbxlAnimate Studio Plugin
 
-Luau plugin that connects to the rbxlAnimate API with **Roblox OAuth only**.
+Import `.rbxlAnimate.json` (or pasted JSON) onto a selected **R15** character as a real `KeyframeSequence` under `AnimSaves`.
 
-## Planned features
-- Sign in with Roblox / link to website account
-- Browse cloud library and apply KeyframeSequence to selected R15/R6
-- Generate animations from Studio
-- Background modes: environment, scene kit, stage set
-- Usage meter + open website to buy more / upgrade Pro
+## Install (local plugin)
 
-## Install (when published)
-1. Get the plugin from the Creator Store or load this folder as a local plugin
-2. Open the rbxlAnimate panel in Studio
-3. Sign in with Roblox
-4. Apply or generate
+1. In Roblox Studio: **Plugins → Plugins Folder** (opens your local plugins directory).
+2. Copy `RbxlAnimate.plugin.luau` into that folder.
+3. Restart Studio (or reload plugins).
+4. Toolbar → **rbxlAnimate → Importer**.
 
-Plugin source will live in `src/` as Luau modules talking to `https://your-domain/api/*`.
+## Use
+
+1. On the website, generate an animation → **Copy for Studio** (or Download JSON).
+2. In Studio, select an R15 model (must have a Humanoid).
+3. Paste JSON into the importer (or **Import .json file…**).
+4. Click **Apply to selected R15**.
+5. Open the **Animation Editor**, select the character, and load the sequence from **AnimSaves**.
+
+## Format
+
+`rbxlAnimate.keyframesequence.v1` — joint orientations in degrees + optional Root position for hops/flips. Poses are written as a full R15 hierarchy (`HumanoidRootPart` → `LowerTorso` → …) so the Animation Editor can edit them.
+
+## Notes
+
+- Website export is the source of truth; this plugin does not call a cloud API yet.
+- R6 is not supported on the live site (R15 only).
+- OAuth / cloud library / generate-from-Studio are still future work.

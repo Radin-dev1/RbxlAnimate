@@ -1023,7 +1023,7 @@ export function generateAnimationFromPrompt(opts: {
     intensity: s.intensity * intensityBoost,
   }));
   const hasFlip = steps.some((s) => isFlipVerb(s.verb));
-  const frames = hasFlip ? (high ? 96 : 64) : high ? 72 : 36;
+  const frames = hasFlip ? (high ? 120 : 80) : high ? 96 : 48;
   const phases = buildPhases(steps, loopable);
 
   const inferred = inferDurationSeconds({
@@ -1079,34 +1079,43 @@ export function generateAnimationFromPrompt(opts: {
   };
 }
 
-/** Build a counter-fighter clip (mirrored / offset) for Duel mode */
+/** Build a counter-fighter clip synced to the hero's beat structure (Duel mode) */
 export function generateDuelOpponent(hero: AnimationClip, variation = Math.random()): AnimationClip {
-  const counterPrompt =
-    /sword|blade|slash/i.test(hero.prompt)
-      ? "block then slash then dodge"
-      : /box|punch|fight|duel|combat/i.test(hero.prompt)
-        ? "dodge then punch then kick then block"
-        : "block then punch then dodge then kick";
+  const steps = hero.parsedSteps?.length
+    ? hero.parsedSteps
+    : ["punch", "dodge", "kick"];
+  // Mirror responses: attack ↔ defend on the same step count
+  const counterMap: Record<string, string> = {
+    punch: "block",
+    kick: "dodge",
+    slash: "block",
+    stomp: "jump",
+    dodge: "punch",
+    block: "slash",
+    jump: "kick",
+    hop: "punch",
+    spin: "dodge",
+    wave: "punch",
+    victory: "kick",
+    celebrate: "dodge",
+  };
+  const countered = steps.map((v) => counterMap[v] || "dodge").join(" then ");
   const opp = generateAnimationFromPrompt({
-    prompt: counterPrompt,
+    prompt: countered,
     style: "combat",
     quality: hero.quality,
     source: hero.source,
-    intensity: 1.05,
+    intensity: 1.08,
     variation,
     preferPromptStyle: true,
+    duration: hero.duration,
   });
-  // Align duration roughly
-  const scale = hero.duration / Math.max(0.01, opp.duration);
   return {
     ...opp,
     id: `${hero.id}-rival`,
-    name: `Rival vs ${hero.name}`.slice(0, 42),
+    name: `Rival`,
     duration: hero.duration,
-    keyframes: opp.keyframes.map((kf) => ({
-      ...kf,
-      time: Math.min(hero.duration, kf.time * scale),
-    })),
+    parsedSteps: countered.split(" then "),
   };
 }
 
@@ -1114,7 +1123,7 @@ export function clipToRobloxExport(clip: AnimationClip) {
   return {
     format: "rbxlAnimate.keyframesequence.v1",
     name: clip.name,
-    rig: clip.rig || "r15",
+    rig: "r15",
     looped: clip.style === "walk" || clip.style === "idle",
     priority: "Action",
     length: clip.duration,
@@ -1123,18 +1132,29 @@ export function clipToRobloxExport(clip: AnimationClip) {
       time: kf.time,
       poses: kf.poses.map((p) => ({
         joint: p.joint,
-        // Roblox uses CFrame; plugin converts Euler XYZ degrees → CFrame
         orientationDegrees: { x: p.rx, y: p.ry, z: p.rz },
+        // Root hop / flip arc — Studio plugin applies as Pose CFrame translation
+        position: {
+          x: p.px ?? 0,
+          y: p.py ?? 0,
+          z: p.pz ?? 0,
+        },
       })),
     })),
     meta: {
       prompt: clip.prompt,
       style: clip.style,
-      rig: clip.rig || "r15",
+      rig: "r15",
       quality: clip.quality,
       source: clip.source,
       createdAt: clip.createdAt,
       id: clip.id,
+      parsedSteps: clip.parsedSteps || [],
     },
   };
+}
+
+/** Copy-ready string for the Studio plugin paste box */
+export function clipToRobloxExportString(clip: AnimationClip) {
+  return JSON.stringify(clipToRobloxExport(clip), null, 2);
 }

@@ -1,6 +1,6 @@
 # rbxlAnimate
 
-AI Roblox animation maker — themed web studio. The live site *is* the maker (no separate marketing app).
+AI Roblox animation maker — the live site *is* the maker.
 
 **Repo:** https://github.com/Radin-dev1/RbxlAnimate  
 **Live (GitHub Pages):** https://radin-dev1.github.io/RbxlAnimate/
@@ -10,57 +10,47 @@ AI Roblox animation maker — themed web studio. The live site *is* the maker (n
 Primary host is **GitHub Pages** via Actions (static Next.js export).
 
 1. Push to `main` (workflow: `.github/workflows/deploy-pages.yml`).
-2. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. After the first successful run, open:  
-   **https://radin-dev1.github.io/RbxlAnimate/**
+2. Repo **Settings → Pages → Source: GitHub Actions**.
+3. Open: **https://radin-dev1.github.io/RbxlAnimate/**
 
 Local builds use no `basePath`. CI sets `GITHUB_PAGES=true` so assets resolve under `/RbxlAnimate`.
 
 ## What's working
 
-- **Homepage = maker** — prompt → real **R15 / R6** 3D preview (GLB from Blender) → export
-- **Rigs** — `public/rigs/r15.glb` (MrXen0 R15) and `public/rigs/r6.glb` (classic blocky R6 from Blender R6)
-- **Rig toggle** — R15 | R6 in the maker; exports tag `rig: "r15" | "r6"`
-- **Style themes** — Classic Red/Black + Aqua Slate, Volt Mint, Rose Noir, Coral Smoke, Neon Grove, Teal Punch (Settings + header swatches)
-- **Procedural AI** — motion grammar, anticipation → action → follow-through → settle
+- **Homepage = maker** — prompt → R15 3D preview → export / copy for Studio
+- **Guest generate** — no forced sign-in; sessions stay local
+- **Motion grammar** — verbs, sequences (`then`), anticipation → action → follow → settle
+- **Solo | Duel fight** — two R15s with mirrored counter moves
+- **Timeline scrubber** — scrub, speed, loop / reverse / mirror
+- **YouTube → idea** — oEmbed title inferred into a prompt (not pose-from-video ML)
+- **Studio plugin** — `plugin/RbxlAnimate.plugin.luau` imports JSON into `AnimSaves` as a real KeyframeSequence
 - **No watermarks** on exports (`.rbxlAnimate.json`)
-- **Auth:** demo email sign-in (localStorage)
-- Plugin folder stub for Phase 2
+- **Themes** — Classic Red/Black + extra palettes in Settings
 
-## Rig credits
-
-- **R15:** MrXen0 — `MrXen0_R15RIG_v1.2`
-- **R6:** Blender R6 community rig (blocky body meshes + InternalArmature hierarchy)
-
-Re-export scripts live in `scripts/` (`export_r15_clean.py`, `export_r6_v2.py`) for Blender 4+/5+.
-
-## Quick start
+## Quick start (web)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) — you land in the maker. Sign in with any email to generate.
+Open [http://localhost:3000](http://localhost:3000). Type a move (e.g. `backflip`), generate, **Copy for Studio**.
 
-## Roblox OAuth (Client ID / Secret)
+## Studio plugin
 
-On **GitHub Pages** the site is static, so secrets cannot run in the browser. Email demo login works without keys.
+See [plugin/README.md](plugin/README.md). Short version: drop `plugin/RbxlAnimate.plugin.luau` into Studio’s Plugins Folder, select an R15, paste JSON, Apply.
 
-When you add a backend (or run Next.js as a server), put credentials in **`.env.local`** (never commit this file):
+## Rig credits
 
-```bash
-ROBLOX_CLIENT_ID=your_client_id
-ROBLOX_CLIENT_SECRET=your_client_secret
-```
+- **R15:** MrXen0 — `MrXen0_R15RIG_v1.2` (`public/rigs/r15.glb`)
 
-Create the OAuth app at [Roblox Creator Dashboard → Credentials](https://create.roblox.com/dashboard/credentials), set the redirect to `/api/auth/callback/roblox`, and see [`.env.example`](.env.example) for the full list.
+Re-export scripts live in `scripts/` for Blender 4+/5+.
 
-Optional UI-only flag (marks Roblox as “Ready” on `/login` — does not enable real OAuth on Pages):
+## Roblox OAuth
 
-```bash
-NEXT_PUBLIC_ROBLOX_OAUTH=true
-```
+On **GitHub Pages** the site is static — secrets cannot run in the browser. Guest / email demo login works without keys.
+
+When you add a backend, put credentials in **`.env.local`** (never commit). See [`.env.example`](.env.example).
 
 ## Scripts
 
@@ -68,35 +58,12 @@ NEXT_PUBLIC_ROBLOX_OAUTH=true
 |---|---|
 | `npm run dev` | Local development |
 | `npm run build` | Static export → `out/` |
-| `npm start` | Not used for Pages (static). For local preview of `out/`, use any static server. |
 
 ## Static hosting notes
 
-GitHub Pages serves **static files only**. This project uses `output: 'export'`.
-
 | Feature | On Pages |
 |---|---|
-| Animation generation | Client-side (`generateAnimationFromPrompt`) |
-| Sign-in | Demo email in localStorage |
-| Pro / usage packs | Demo upgrade (local) |
-| Stripe / NextAuth API | Not available on static Pages |
-
-## Monetization
-
-| | Free | Pro |
-|---|---|---|
-| Price | $0 | $15.99/mo or $179.99/yr |
-| Generations | 10/mo | 150/mo |
-| Text → anim | Yes | Yes |
-| Video → anim | No | Yes |
-| Quality | Standard | High |
-| Watermark | Never | Never |
-| Top-up packs | Yes | Yes |
-
-## Phase 2 — Studio plugin
-
-See [`plugin/README.md`](plugin/README.md): Roblox-only login, apply animations in Studio, generate backgrounds.
-
-## License  ,
-
-Private / all rights reserved unless otherwise noted. Rig authors retain rights to their original Blender assets; shipped GLBs are optimized web previews for this app.
+| Animation generation | Client-side procedural grammar |
+| Sign-in | Local guest / demo email |
+| Payments | Demo / Stripe wiring for later |
+| Studio import | Local Luau plugin + JSON paste |

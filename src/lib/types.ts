@@ -123,7 +123,7 @@ export interface AnimationClip {
   youtube?: { id: string; title?: string; thumbnail?: string };
 }
 
-export const FREE_MONTHLY_USAGE = 10;
+export const FREE_MONTHLY_USAGE = 30;
 export const PRO_MONTHLY_USAGE = 150;
 
 export const PRO_MONTHLY_PRICE = 15.99;
